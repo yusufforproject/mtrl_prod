@@ -1,17 +1,20 @@
+import 'dart:async';
 import 'dart:ffi';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mtrl_prod/apis/get_schedule.dart';
+import 'package:mtrl_prod/components/loading.dart';
 import '../components/print_models.dart';
-import '../apis/get_barcode.dart';
-import '../apis/add_barcode.dart';
+import '../api/get_barcode.dart';
+import '../api/add_barcode.dart';
+import '../api/get_schedule.dart';
 import '../components/custom_appbar.dart';
 
 import '../components/bottom_nav.dart';
 import '../components/uppercase.dart';
 import '../core/app_colors.dart';
 import '../core/variable.dart';
+import '../data/database_helper.dart';
 
 class ProdPage extends StatefulWidget {
   const ProdPage({super.key});
@@ -21,6 +24,9 @@ class ProdPage extends StatefulWidget {
 }
 
 class _ProdPageState extends State<ProdPage> {
+  // final TextEditingController schController = Variable.schedules.isNotEmpty
+  //     ? TextEditingController(text: Variable.schedules[0]['qcode_sch'])
+  //     : TextEditingController();
   final TextEditingController schController = TextEditingController();
   final TextEditingController qtyController = TextEditingController();
   String? searchItem;
@@ -29,85 +35,133 @@ class _ProdPageState extends State<ProdPage> {
   void initState() {
     super.initState();
     // fetchBarcodeBySch();
-    _scanSchedule();
+    // _scanSchedule();
   }
 
   Future<void> addBarcode() async {
     // await getSchedule();
     Variable.qtyInput = qtyController.text;
-    bool isSuccess;
-    isSuccess = await addNewBarcode(qtyController.text);
-    if (isSuccess) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Barcode added successfully"),
+    if (Variable.serverStatus == true) {
+      bool isSuccess;
+      isSuccess = await addNewBarcode(qtyController.text);
+      if (isSuccess) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Barcode added successfully"),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.green,
+          ),
+        );
+        setState(() {
+          fetchBarcodeById();
+          // Navigator.pushReplacementNamed(context, '/prod');
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Failed to add barcode'),
           duration: Duration(seconds: 3),
-          backgroundColor: Colors.green,
-        ),
-      );
-      setState(() {
-        fetchBarcodeById();
-        // Navigator.pushReplacementNamed(context, '/prod');
-      });
+          backgroundColor: Colors.red,
+        ));
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Failed to add barcode'),
-        duration: Duration(seconds: 3),
-        backgroundColor: Colors.red,
-      ));
+      // await DatabaseHelper().insertAbcBarcode(int.parse(qtyController.text));
+      await DatabaseHelper().insertAbcBarcode(int.parse(Variable.qtyInput));
     }
   }
 
   Future<void> fetchBarcodeById() async {
     // await getSchedule();
-    bool isSuccess = false;
-    if (Variable.schedules.isNotEmpty) {
-      isSuccess = await getBarcodesById();
-      if (isSuccess) {
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   const SnackBar(
-        //     content: Text("Barcode fetched successfully"),
-        //     duration: Duration(seconds: 3),
-        //     backgroundColor: Colors.green,
-        //   ),
-        // );
-        // setState(() {});
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Failed to fetching data'),
-          duration: Duration(seconds: 3),
-          backgroundColor: Colors.red,
-        ));
+    if (Variable.serverStatus == true) {
+      bool isSuccess = false;
+      if (Variable.schedules.isNotEmpty) {
+        isSuccess = await getBarcodesById();
+        if (isSuccess) {
+          // ScaffoldMessenger.of(context).showSnackBar(
+          //   const SnackBar(
+          //     content: Text("Barcode fetched successfully"),
+          //     duration: Duration(seconds: 3),
+          //     backgroundColor: Colors.green,
+          //   ),
+          // );
+          // setState(() {});
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Failed to fetching data'),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ));
+        }
       }
+    } else {
+      Variable.barcodesById.clear();
+      Variable.barcodesById = await DatabaseHelper().getDataAbc();
+      setState(() {
+        print('barcodes by id: ${Variable.barcodesById}');
+      });
+      // Variable.barcodesById.add({
+      //   'bc_entried': Variable.schedules[0]['qcode_sch'],
+      // });
     }
   }
 
   Future<void> _scanSchedule() async {
-    final bool response = await getSchedule(schController.text.isEmpty
-        ? Variable.schedules[0]['qcode_sch']
-        : schController.text);
-    if (!response) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text("Schedule not found", style: TextStyle(color: Colors.white)),
-          duration: Duration(seconds: 3),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } else {
-      if (schController.text.isNotEmpty) {
+    loading(context, message: "Getting schedule data...");
+    if (Variable.serverStatus == false) {
+      if (schController.text.split('_').last.length >= 3 &&
+          schController.text.contains('-')) {
+        Variable.schedules.clear();
+        Variable.schedules.add(
+          {
+            'qcode_sch': schController.text,
+            'size': schController.text.split('_').first,
+            'descr': '-',
+            'qtysch': '-',
+            'act': '-',
+          },
+        );
+        print(Variable.schedules);
+        setState(() {
+          fetchBarcodeById();
+        });
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Sch found"),
+            content: Text("Schedule not found",
+                style: TextStyle(color: Colors.white)),
             duration: Duration(seconds: 3),
-            backgroundColor: Colors.green,
+            backgroundColor: Colors.red,
           ),
         );
       }
-      setState(() {
-        fetchBarcodeById();
+      Timer(const Duration(seconds: 2), () {
+        Navigator.of(context).pop();
       });
+    } else {
+      final bool response = await getSchedule(schController.text);
+
+      if (!response) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Schedule not found",
+                style: TextStyle(color: Colors.white)),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else {
+        if (schController.text.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Sch found"),
+              duration: Duration(seconds: 3),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        setState(() {
+          fetchBarcodeById();
+        });
+      }
     }
   }
 
@@ -134,10 +188,7 @@ class _ProdPageState extends State<ProdPage> {
                     Expanded(
                       child: TextFormField(
                         autofocus: true,
-                        controller: Variable.schedules.isNotEmpty
-                            ? TextEditingController(
-                                text: Variable.schedules[0]['qcode_sch'])
-                            : schController,
+                        controller: Variable.schedules.isEmpty ? schController : TextEditingController(text: Variable.schedules[0]['qcode_sch']),
                         inputFormatters: [UpperCaseTextFormatter()],
                         style: const TextStyle(
                           color: Colors.black,
@@ -193,13 +244,17 @@ class _ProdPageState extends State<ProdPage> {
                           elevation: 5,
                         ),
                         onPressed: () {
-                          setState(() {
+                          // setState(() {
                             schController.clear();
                             Variable.barcodesBySch.clear();
                             Variable.barcodesById.clear();
                             Variable.schedules.clear();
                             // Variable.idPrint = '';
-                          });
+                            print('schedule: ${Variable.schedules}');
+                            setState(() {
+                              
+                            });
+                          // });
                         },
                         child: const Icon(
                           Icons.refresh_outlined,
@@ -451,160 +506,175 @@ class _ProdPageState extends State<ProdPage> {
                                             })
                                       ]);
                                 });
-                          } else if (double.parse(
-                                  Variable.treatmentDetails[0]['akt']) <
-                              (double.parse(Variable.bom[0]['qty']) *
-                                      int.parse(qtyController.text) *
-                                      convert)
-                                  .toInt()) {
-                            showDialog(
-                                context: context,
-                                builder: (context) {
-                                  return AlertDialog(
+                          } else {
+                            if (Variable.serverStatus == true) {
+                              if (double.parse(
+                                      Variable.treatmentDetails[0]['akt']) <
+                                  (double.parse(Variable.bom[0]['qty']) *
+                                          int.parse(qtyController.text) *
+                                          convert)
+                                      .toInt()) {
+                                showDialog(
+                                    context: context,
+                                    builder: (context) {
+                                      return AlertDialog(
+                                          title: Row(
+                                            children: [
+                                              Icon(Icons.warning,
+                                                  color: Colors.red[600]),
+                                              const SizedBox(width: 10),
+                                              Text('Treatment habis',
+                                                  style: TextStyle(
+                                                      color: Colors.red[600],
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 16)),
+                                            ],
+                                          ),
+                                          content: const Text(
+                                              'Material tidak cukup\nSilahkan scan treatment baru'),
+                                          actions: [
+                                            TextButton(
+                                                child: const Text('OK'),
+                                                onPressed: () {
+                                                  Navigator.of(context).pop();
+                                                  Navigator.pushNamed(
+                                                      context, '/mtrl');
+                                                })
+                                          ]);
+                                    });
+                              } else if (Variable.bom.any((item) =>
+                                  item['child'] !=
+                                  Variable.treatmentDetails[0]['bc_entried']
+                                      .split('_')
+                                      .first)) {
+                                Navigator.of(context)
+                                    .pushReplacementNamed('/mtrl');
+                                showDialog(
+                                  context: context,
+                                  builder: (BuildContext context) {
+                                    return AlertDialog(
                                       title: Row(
                                         children: [
                                           Icon(Icons.warning,
                                               color: Colors.red[600]),
-                                          const SizedBox(width: 10),
-                                          Text('Treatment habis',
-                                              style: TextStyle(
-                                                  color: Colors.red[600],
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 16)),
-                                        ],
-                                      ),
-                                      content: const Text(
-                                          'Material tidak cukup\nSilahkan scan treatment baru'),
-                                      actions: [
-                                        TextButton(
-                                            child: const Text('OK'),
-                                            onPressed: () {
-                                              Navigator.of(context).pop();
-                                              Navigator.pushNamed(
-                                                  context, '/mtrl');
-                                            })
-                                      ]);
-                                });
-                          } else if (Variable.bom.any((item) =>
-                              item['child'] !=
-                              Variable.treatmentDetails[0]['bc_entried']
-                                  .split('_')
-                                  .first)) {
-                            Navigator.of(context).pushReplacementNamed('/mtrl');
-                            showDialog(
-                              context: context,
-                              builder: (BuildContext context) {
-                                return AlertDialog(
-                                  title: Row(
-                                    children: [
-                                      Icon(Icons.warning,
-                                          color: Colors.red[600]),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Material tidak sesuai',
-                                        style: TextStyle(
-                                            color: Colors.red[600],
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
-                                  content: SingleChildScrollView(
-                                    child: ListBody(
-                                      children: [
-                                        Text(
-                                            '${'BOM (' + Variable.schedules[0]['size']}):',
-                                            style: const TextStyle(
-                                                color: Colors.black,
-                                                fontWeight: FontWeight.bold)),
-                                        ...Variable.bom.map((item) {
-                                          return Text(
-                                            '- ' + item['child'],
-                                            style: const TextStyle(
-                                                color: Colors.black,
-                                                fontWeight: FontWeight.bold),
-                                          );
-                                        }).toList(),
-                                      ],
-                                    ),
-                                  ),
-                                  actions: <Widget>[
-                                    TextButton(
-                                      child: const Text(
-                                        'OK',
-                                        style:
-                                            TextStyle(color: AppColors.primary),
-                                      ),
-                                      onPressed: () {
-                                        Navigator.of(context).pop();
-                                      },
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          } else {
-                            if (Variable.parent.isNotEmpty) {
-                              showDialog(
-                                  context: context,
-                                  builder: (context) {
-                                    return AlertDialog(
-                                      title: Row(
-                                        children: [
-                                          Icon(Icons.question_mark_rounded,
-                                              color: AppColors.primary),
                                           const SizedBox(width: 8),
                                           Text(
-                                            '${Variable.schedules[0]['size']}',
+                                            'Material tidak sesuai',
                                             style: TextStyle(
-                                              color: AppColors.primary,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                                color: Colors.red[600],
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold),
                                           ),
                                         ],
                                       ),
-                                      content: Text(
-                                        'akan dilapis sebanyak ${qtyController.text} roll?',
-                                        style: const TextStyle(
-                                          color: Colors.black,
-                                          fontWeight: FontWeight.bold,
+                                      content: SingleChildScrollView(
+                                        child: ListBody(
+                                          children: [
+                                            Text(
+                                                '${'BOM (' + Variable.schedules[0]['size']}):',
+                                                style: const TextStyle(
+                                                    color: Colors.black,
+                                                    fontWeight:
+                                                        FontWeight.bold)),
+                                            ...Variable.bom.map((item) {
+                                              return Text(
+                                                '- ' + item['child'],
+                                                style: const TextStyle(
+                                                    color: Colors.black,
+                                                    fontWeight:
+                                                        FontWeight.bold),
+                                              );
+                                            }).toList(),
+                                          ],
                                         ),
                                       ),
                                       actions: <Widget>[
-                                        Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: <Widget>[
-                                              TextButton(
-                                                child: Text(
-                                                  'TIDAK',
-                                                  style: TextStyle(
-                                                      color: Colors.red[600]),
-                                                ),
-                                                onPressed: () {
-                                                  addBarcode();
-                                                  Navigator.of(context).pop();
-                                                },
-                                              ),
-                                              TextButton(
-                                                child: Text(
-                                                  'YA',
-                                                  style: TextStyle(
-                                                      color: Colors.green[600]),
-                                                ),
-                                                onPressed: () {
-                                                  addBarcode();
-                                                  Navigator.of(context).pop();
-                                                  Navigator.of(context)
-                                                      .pushReplacementNamed(
-                                                          '/srtjln');
-                                                },
-                                              ),
-                                            ])
+                                        TextButton(
+                                          child: const Text(
+                                            'OK',
+                                            style: TextStyle(
+                                                color: AppColors.primary),
+                                          ),
+                                          onPressed: () {
+                                            Navigator.of(context).pop();
+                                          },
+                                        ),
                                       ],
                                     );
-                                  });
+                                  },
+                                );
+                              } else {
+                                if (Variable.parent.isNotEmpty) {
+                                  showDialog(
+                                      context: context,
+                                      builder: (context) {
+                                        return AlertDialog(
+                                          title: Row(
+                                            children: [
+                                              Icon(Icons.question_mark_rounded,
+                                                  color: AppColors.primary),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                '${Variable.schedules[0]['size']}',
+                                                style: TextStyle(
+                                                  color: AppColors.primary,
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          content: Text(
+                                            'akan dilapis sebanyak ${qtyController.text} roll?',
+                                            style: const TextStyle(
+                                              color: Colors.black,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          actions: <Widget>[
+                                            Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: <Widget>[
+                                                  TextButton(
+                                                    child: Text(
+                                                      'TIDAK',
+                                                      style: TextStyle(
+                                                          color:
+                                                              Colors.red[600]),
+                                                    ),
+                                                    onPressed: () {
+                                                      addBarcode();
+                                                      Navigator.of(context)
+                                                          .pop();
+                                                    },
+                                                  ),
+                                                  TextButton(
+                                                    child: Text(
+                                                      'YA',
+                                                      style: TextStyle(
+                                                          color: Colors
+                                                              .green[600]),
+                                                    ),
+                                                    onPressed: () {
+                                                      addBarcode();
+                                                      Navigator.of(context)
+                                                          .pop();
+                                                      Navigator.of(context)
+                                                          .pushReplacementNamed(
+                                                              '/srtjln');
+                                                    },
+                                                  ),
+                                                ])
+                                          ],
+                                        );
+                                      });
+                                }
+                              }
+                            } else {
+                              addBarcode();
                             }
                           }
                         },
@@ -634,9 +704,8 @@ class _ProdPageState extends State<ProdPage> {
                 ),
                 const SizedBox(height: 16),
                 FutureBuilder(
-                  future: Variable.barcodesById.isEmpty
-                      ? fetchBarcodeById()
-                      : null,
+                  future:
+                      Variable.barcodesById.isEmpty ? fetchBarcodeById() : null,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(

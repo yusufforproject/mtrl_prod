@@ -1,12 +1,13 @@
 name: mtrl_prod
 description: "A new Flutter project."
-publish_to: 'none'
+publish_to: "none"
 version: 0.1.0
 
 environment:
   sdk: ^3.5.3
 
 dependencies:
+  dotenv: ^4.2.0
   esc_pos_utils: ^1.1.0
   flutter:
     sdk: flutter
@@ -14,6 +15,7 @@ dependencies:
   intl: ^0.20.1
   print_bluetooth_thermal: ^1.1.5
   shared_preferences: ^2.3.5
+  sqflite: ^2.4.1
 
 dev_dependencies:
   flutter_lints: ^4.0.0

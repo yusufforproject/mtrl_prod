@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:mtrl_prod/apis/get_schedule.dart';
 
+import '../../api/get_schedule.dart';
 import '../../components/bottom_nav.dart';
 import '../../components/custom_appbar.dart';
 import '../../core/app_colors.dart';

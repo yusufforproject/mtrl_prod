@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../apis/get_dateshift.dart';
-import '../apis/get_items.dart';
-import '../apis/get_mc_by_sec.dart';
-import '../apis/update_dvcstat.dart';
+import '../api/cek_server.dart';
+import '../api/get_dateshift.dart';
+import '../api/get_items.dart';
+import '../api/get_mc_by_sec.dart';
+import '../api/update_dvcstat.dart';
 import '../components/bottom_nav.dart';
 import '../components/custom_appbar.dart';
 import '../core/app_colors.dart';
@@ -34,27 +35,44 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _handleLogout() async {
-    bool logoutSuccess = await updateDvcStat('logout');
-    if (logoutSuccess) {
+    final serverStatus = await checkServerStatus();
+    if (serverStatus) {
+      bool logoutSuccess = await updateDvcStat('logout');
+      if (logoutSuccess) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Logout success"),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const LoginPage(),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Logout failed"),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Logout success"),
+          content: Text("Server Offline"),
           duration: Duration(seconds: 3),
-          backgroundColor: Colors.green,
+          backgroundColor: Colors.red,
         ),
       );
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => const LoginPage(),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Logout failed"),
-          duration: Duration(seconds: 3),
-          backgroundColor: Colors.red,
         ),
       );
     }
@@ -216,7 +234,8 @@ class _HomePageState extends State<HomePage> {
                   icon: const SizedBox.shrink(),
                   value: Variable.macAdress.isEmpty ? null : Variable.macAdress,
                   decoration: InputDecoration(
-                    icon: const Icon(Icons.settings, color: AppColors.lightblue),
+                      icon: const Icon(Icons.settings,
+                          color: AppColors.lightblue),
                       enabledBorder: OutlineInputBorder(
                         borderSide: const BorderSide(
                           color: AppColors.lightblue,

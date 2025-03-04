@@ -3,12 +3,16 @@ import 'package:intl/intl.dart';
 import 'package:print_bluetooth_thermal/post_code.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
 
-import '../apis/cek_operator.dart';
-import '../apis/get_dateshift.dart';
-import '../apis/get_items.dart';
-import '../apis/get_mc_by_sec.dart';
-import '../apis/update_dvcstat.dart';
+import '../api/cek_server.dart';
+import '../components/loading.dart';
+import '../data/database_helper.dart';
+import '../api/cek_operator.dart';
+import '../api/get_dateshift.dart';
+import '../api/get_items.dart';
+import '../api/get_mc_by_sec.dart';
+import '../api/update_dvcstat.dart';
 import '../components/custom_appbar.dart';
 import '../core/app_colors.dart';
 import '../core/variable.dart';
@@ -31,6 +35,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
+    // _usingOffline();
     _initData();
     getBluetooth();
     SharedPreferences.getInstance().then((prefs) {
@@ -38,6 +43,7 @@ class _LoginPageState extends State<LoginPage> {
         print('$key: ${prefs.get(key)}');
       });
     });
+      // setState(() {});
   }
 
   @override
@@ -50,7 +56,9 @@ class _LoginPageState extends State<LoginPage> {
     await getDateshift();
     await getMcnList();
     await getItems();
-    setState(() {});
+    // await _usingOffline();
+    setState(() {
+    });
   }
 
   Future<void> getBluetooth() async {
@@ -120,34 +128,101 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _scanOperator() async {
     // userFound = false;
     // await cekOpr(_penneng.text);
+    // const Loading();
+    // showDialog(
+    //   context: context,
+    //   barrierDismissible: false,
+    //   builder: (BuildContext context) {
+    //     return const Center(
+    //       child: AlertDialog()
+    //       // child: Text("Connecting..."),
+    //     );
+    //   },
+    // );
+    loading(context, message: "Getting operator data...");
+    final serverStatus = await checkServerStatus();
+    Navigator.of(context).pop();
 
-    final bool response = await cekOpr(_penneng.text);
-    if (!response) {
-      userFound = false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text("User Not Found", style: TextStyle(color: Colors.white)),
-          duration: Duration(seconds: 3),
-          backgroundColor: Colors.red,
-        ),
-      );
+    if (serverStatus) {
+      final bool response = await cekOpr(_penneng.text);
+      if (!response) {
+        userFound = false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text("User Not Found", style: TextStyle(color: Colors.white)),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else {
+        userFound = true;
+      }
+      if (userFound) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("User Found"),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+        updateDvcStat('login');
+      }
     } else {
-      userFound = true;
+      if (_penneng.text.length == 7 && _penneng.text.contains('-')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text("Server Offline", style: TextStyle(color: Colors.white)),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ),
+        );
+        Variable.oprCode = _penneng.text;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+        updateDvcStat('login');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text("Penneng Salah", style: TextStyle(color: Colors.white)),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
-    if (userFound) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("User Found"),
-          duration: Duration(seconds: 3),
-          backgroundColor: Colors.green,
-        ),
-      );
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomePage()),
-      );
-      updateDvcStat('login');
+  }
+
+  Future<void> _usingOffline() async {
+    final dbHelper = DatabaseHelper();
+    final db = await sqflite.openDatabase('abc_prod.db');
+
+// Save a message
+    // await dbHelper.insertMessage("Hello, this is offline!");
+    print(db);
+
+// Retrieve messages
+    List<Map<String, dynamic>> messages = await dbHelper.getMessages();
+    for (var msg in messages) {
+      print("Message: ${msg['text']}");
+    }
+  }
+
+  Future<void> printAllMessages() async {
+    final db = await sqflite.openDatabase('abc_prod.db');
+    List<Map<String, dynamic>> messages = await db.query('messages');
+
+    for (var msg in messages) {
+      print(
+          "ID: ${msg['id']}, Text: ${msg['text']}, Timestamp: ${msg['timestamp']}");
     }
   }
 
@@ -166,7 +241,35 @@ class _LoginPageState extends State<LoginPage> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // SizedBox(height: MediaQuery.of(context).size.height * 0.05),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      // color: Variable.serverStatus! ? Colors.green[600] : Colors.red[600],
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Variable.serverStatus! ? Colors.green[600]! : Colors.red[600]!,
+                      )
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Text(
+                        Variable.serverStatus! ? 'Server Online' : 'Offline Mode',
+                        
+                        style: TextStyle(
+                        
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Variable.serverStatus! ? Colors.green[600] : Colors.red[600],
+                        ),
+                        
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -351,15 +454,23 @@ class _LoginPageState extends State<LoginPage> {
                           borderRadius: BorderRadius.circular(25),
                         ),
                       ),
-                      items: Variable.mcnList.map<DropdownMenuItem<String>>(
-                          (Map<String, dynamic> value) {
-                        return DropdownMenuItem<String>(
-                          value: value['mcn'],
-                          child: Text(
-                            value['mcn'].toUpperCase(),
-                          ),
-                        );
-                      }).toList(),
+                      items: Variable.mcnList.isEmpty
+                          ? Variable.offlineMcnList
+                              .map<DropdownMenuItem<String>>(
+                                  (Map<String, dynamic> value) {
+                              return DropdownMenuItem<String>(
+                                  value: value['mcn'],
+                                  child: Text(value['mcn'].toUpperCase()));
+                            }).toList()
+                          : Variable.mcnList.map<DropdownMenuItem<String>>(
+                              (Map<String, dynamic> value) {
+                              return DropdownMenuItem<String>(
+                                value: value['mcn'],
+                                child: Text(
+                                  value['mcn'].toUpperCase(),
+                                ),
+                              );
+                            }).toList(),
                       onChanged: (String? newValue) {
                         setState(() {
                           Variable.mcnSelected = newValue!;
@@ -637,6 +748,7 @@ class _LoginPageState extends State<LoginPage> {
               onPressed: () {
                 _initData();
                 Navigator.pop(context);
+                setState(() {});
               },
               child: const Text('OK'),
             ),

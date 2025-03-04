@@ -20,8 +20,9 @@ class Variable {
         return 'Unknown section';
     }
   }
+
   static String get uomBySect {
-    switch (sect+subSec) {
+    switch (sect + subSec) {
       case 'ABG-SL':
         return 'ROLL';
       case 'ACL':
@@ -54,11 +55,58 @@ class Variable {
         return '';
     }
   }
+
   static var appName = "MATERIAL PROD";
   static var appSubtitle = "Material Production";
   static var appVersion = "v2.0.0 - 25.02";
   static var dvcId = "SC23001";
   static var dvcPlaced = "Office";
+
+  static List<Map<String, dynamic>> get offlineMcnList {
+    switch (sect) {
+      case 'ABG':
+        return [
+          {'mcn': 'ABG1'},
+          {'mcn': 'ABG2'},
+          // Add more machines as needed
+        ];
+      case 'ACL':
+        return [
+          {'mcn': 'ACL01'},
+          {'mcn': 'ACL02'},
+          // Add more machines as needed
+        ];
+      case 'ABC':
+        return [
+          {'mcn': 'ABC1'},
+          {'mcn': 'ABC2'},
+          {'mcn': 'ABC3'},
+          {'mcn': 'ABC4'},
+          {'mcn': 'ABC5'},
+          {'mcn': 'ABC6'},
+          {'mcn': 'ABC7'},
+          {'mcn': 'ABC8'},
+          {'mcn': 'ABC9'},
+          {'mcn': 'ABC10'},
+          {'mcn': 'ABC11'},
+        ];
+      case 'ASQ':
+        return [
+          {'mcn': 'ASQ01'},
+          {'mcn': 'ASQ02'},
+          // Add more machines as needed
+        ];
+      case 'ATE':
+        return [
+          {'mcn': 'ATE01'},
+          {'mcn': 'ATE02'},
+          // Add more machines as needed
+        ];
+      // Add more cases as needed
+      default:
+        return [];
+    }
+  }
 
   // data by system
   static var dateSys = "";
@@ -69,12 +117,13 @@ class Variable {
   static List<Map<String, dynamic>> barcodes = [];
   static List<Map<String, dynamic>> schedules = [];
   static List<Map<String, dynamic>> suratJalan = [];
-  static List<Map<String, dynamic>> parent= [];
+  static List<Map<String, dynamic>> parent = [];
   static List<Map<String, dynamic>> bom = [];
   static List<Map<String, dynamic>> barcodesBySch = [];
   static List<Map<String, dynamic>> barcodesById = [];
   static List<Map<String, dynamic>> treatmentDetails = [];
   static var totQtySch = "";
+  static bool? serverStatus;
 
   // data from user
   static var pickedDate = "";
@@ -103,5 +152,5 @@ class Variable {
   // static var noRoll = "";
   // static var idRoll = "";
 
-  // 
+  //
 }
