@@ -1,7 +1,8 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class Variable {
-  static String baseUrl = "http://10.129.78.183/planta/mtrl_prod";
-  static String mixIP =
-      "http://10.129.78.183/GTBIASAPI/apitxnmltmixv2.php?bc_entried=";
+  static String baseUrl = dotenv.env['BASE_URL']!;
+  static String mixIP = dotenv.env['MIX_URL']!;
   static String sect = 'ABC';
   static String get sectDescription {
     switch (sect) {
