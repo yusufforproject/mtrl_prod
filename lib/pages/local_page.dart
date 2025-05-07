@@ -1,105 +1,147 @@
-// ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'package:flutter/material.dart';
-import 'package:mtrl_prod/api/cek_server.dart';
 
-import '../api/get_barcode.dart';
+import '../api/cek_server.dart';
+import '../api/upload_local_data.dart';
 import '../components/bottom_nav.dart';
 import '../components/custom_appbar.dart';
 import '../components/custom_button.dart';
 import '../components/custom_notif.dart';
+import '../components/loading.dart';
 import '../core/app_colors.dart';
+import '../core/sqflite_data.dart';
 import '../core/variable.dart';
-import 'detail_page.dart';
 
-class RekapPage extends StatelessWidget {
-  const RekapPage({super.key});
+class LocalPage extends StatefulWidget {
+  const LocalPage({super.key});
 
-  Future<List<Map<String, dynamic>>> fetchDataFromDatabase() async {
-    await checkServerStatus();
-    if (Variable.serverStatus == true) {
-      await getBarcodes();
-      return Variable.barcodesForRekap;
+  @override
+  State<LocalPage> createState() => _LocalPageState();
+}
+
+class _LocalPageState extends State<LocalPage> {
+  @override
+  void initState() {
+    super.initState();
+    // checkServerStatus();
+    _fetchData();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchData() async {
+    final result = await DatabaseHelper().fetchDataLocalAclForRekap();
+    final upload = await DatabaseHelper().fetchAll();
+    Variable.barcodesLocal = result;
+    Variable.allBarcodesLocal = upload;
+    print('ini length: ${Variable.barcodesLocal.length}');
+    print('ini length: ${Variable.allBarcodesLocal.length}');
+    print('ini ALL: ${Variable.allBarcodesLocal}');
+    return Variable.barcodesLocal;
+  }
+
+  Future<void> _uploadLocalData() async {
+    final result = await checkServerStatus();
+    if (result) {
+      loading(context, message: 'Uploading data...');
+      final result = await uploadLocalData();
+      if (result) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Data berhasil di-upload ke Server',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.green[600],
+          ),
+        );
+        setState(() {});
+      } else {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Data gagal di-upload ke Server',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red[600],
+          ),
+        );
+      }
     } else {
-      return [];
+      CustomNotification().networkError(context);
     }
   }
 
+  // Future<void> networkCheck() async {
+  //   await checkServerStatus();
+  //   if (Variable.serverStatus == true) {
+  //     CustomNotification().networkOk(context);
+  //   } else {
+  //     CustomNotification().networkError(context);
+  //   }
+  //   setState(() {});
+  // }
+
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () {
-        return Future.value(false);
-      },
-      child: Scaffold(
-        appBar: CustomAppBar(
-          subtitle: 'Rekap',
-          config: false,
-        ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
+    return Scaffold(
+      appBar: CustomAppBar(subtitle: 'Data Lokal', config: false),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              if (Variable.sect == 'ABC')
-                SizedBox(
-                  width: 150,
-                  child: CustomButton(
-                    label: 'SURAT JALAN',
-                    icon: Icons.list_alt_rounded,
-                    bgColor: AppColors.primary,
-                    txtColor: Colors.white,
-                    onPressed: () {
-                      Navigator.of(context).pushNamed('/srtjln');
-                    },
-                  ),
+              Text(
+                'Data Lokal\n(Belum di-upload ke Server)',
+                style: TextStyle(
+                  color: Colors.red[600],
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
-              if (Variable.sect == 'ACL')
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    CustomButton(
-                      label: 'Emergency',
-                      icon: Icons.alarm,
-                      txtColor: Colors.white,
-                      bgColor: Colors.red[600]!,
-                      onPressed: () async {
-                        final result = await checkServerStatus();
-                        if (!result) {
-                          CustomNotification().blockedOffline(context);
-                        } else {
-                          Navigator.of(context).pushNamed('/emergency');
-                        }
-                      },
-                    ),
-                    CustomButton(
-                      label: 'Ganti No. Roll',
-                      icon: Icons.change_circle_outlined,
-                      txtColor: Colors.white,
-                      bgColor: AppColors.primary,
-                      onPressed: () async {
-                        final result = await checkServerStatus();
-                        if (!result) {
-                          CustomNotification().blockedOffline(context);
-                        } else {
-                          Navigator.of(context).pushNamed('/gantinoroll');
-                        }
-                      },
-                    ),
-                  ],
-                ),
+                textAlign: TextAlign.center,
+              ),
+              // const SizedBox(
+              //   height: 8,
+              // ),
+              // Row(
+              //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              //   children: [
+              //     CustomButton(
+              //         label: 'Upload to Server',
+              //         icon: Icons.cloud_upload_outlined,
+              //         txtColor: Colors.white,
+              //         bgColor: Colors.green[600]!,
+              //         onPressed: () {
+              //           _uploadLocalData();
+              //         }),
+              //     // SizedBox(width: 8,),
+              //     CustomButton(
+              //         label: 'Check',
+              //         icon: Icons.wifi_find_outlined,
+              //         txtColor: Colors.white,
+              //         bgColor: AppColors.primary,
+              //         onPressed: () {
+              //           networkCheck();
+              //         }),
+              //   ],
+              // ),
               const SizedBox(
                 height: 8,
               ),
               FutureBuilder(
-                future: fetchDataFromDatabase(),
+                future: _fetchData(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(
                         child: CircularProgressIndicator(
                       color: AppColors.orange,
                     ));
+                    // return loading(context, message: 'Getting data...');
                   } else if (snapshot.hasError) {
+                    // Navigator.pop(context);
                     return Text('Error: ${snapshot.error}');
-                  } else if (snapshot.data!.isEmpty) {
+                  } else if (!snapshot.hasData ||
+                      Variable.barcodesLocal.isEmpty) {
+                    // Navigator.pop(context);
                     return Column(
                       children: [
                         Table(
@@ -108,8 +150,8 @@ class RekapPage extends StatelessWidget {
                           border: TableBorder.all(color: Colors.black),
                           columnWidths: const {
                             0: IntrinsicColumnWidth(),
-                            1: FlexColumnWidth(),
-                            2: IntrinsicColumnWidth(),
+                            1: IntrinsicColumnWidth(),
+                            2: FlexColumnWidth(),
                             3: IntrinsicColumnWidth(),
                             4: IntrinsicColumnWidth(),
                           },
@@ -137,7 +179,7 @@ class RekapPage extends StatelessWidget {
                                     padding: const EdgeInsets.all(8.0),
                                     // color: AppColors.primary,
                                     child: const Text(
-                                      'Itemcode',
+                                      'Tgl',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: Colors.white,
@@ -150,9 +192,9 @@ class RekapPage extends StatelessWidget {
                                   child: Container(
                                     padding: const EdgeInsets.all(8.0),
                                     // color: AppColors.primary,
-                                    child: Text(
-                                      'Sch',
-                                      style: const TextStyle(
+                                    child: const Text(
+                                      'Size',
+                                      style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: Colors.white,
                                       ),
@@ -164,9 +206,9 @@ class RekapPage extends StatelessWidget {
                                   child: Container(
                                     padding: const EdgeInsets.all(8.0),
                                     // color: AppColors.primary,
-                                    child: Text(
-                                      'Akt',
-                                      style: const TextStyle(
+                                    child: const Text(
+                                      'Qty',
+                                      style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: Colors.white,
                                       ),
@@ -174,45 +216,34 @@ class RekapPage extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                TableCell(
-                                  child: Container(
-                                    padding: EdgeInsets.zero,
-                                    // color: AppColors.primary,
-                                    child: Icon(
-                                      Icons.settings_outlined,
-                                      color: Colors.white,
-                                      size: 24,
-                                    ),
-                                  ),
-                                )
                               ],
                             ),
                           ],
                         ),
                         Container(
-                          width: double.infinity,
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
+                            color: Colors.grey[200],
                             border: Border.all(color: Colors.black),
-                            color: Colors.grey[300],
                           ),
-                          child: const Text(
-                            'No data',
-                            textAlign: TextAlign.center,
+                          child: const Center(
+                            child: Text('No Data'),
                           ),
-                        )
+                        ),
                       ],
                     );
                   } else {
-                    final data = snapshot.data as List<Map<String, dynamic>>;
+                    // Navigator.pop(context);
+                    final data = Variable.barcodesLocal;
+                    print('ini barcodes local: ${Variable.barcodesLocal}');
                     return Table(
                       defaultVerticalAlignment:
                           TableCellVerticalAlignment.middle,
                       border: TableBorder.all(color: Colors.black),
                       columnWidths: const {
                         0: IntrinsicColumnWidth(),
-                        1: FlexColumnWidth(),
-                        2: IntrinsicColumnWidth(),
+                        1: IntrinsicColumnWidth(),
+                        2: FlexColumnWidth(),
                         3: IntrinsicColumnWidth(),
                         4: IntrinsicColumnWidth(),
                       },
@@ -240,7 +271,7 @@ class RekapPage extends StatelessWidget {
                                 padding: const EdgeInsets.all(8.0),
                                 // color: AppColors.primary,
                                 child: const Text(
-                                  'Itemcode',
+                                  'Tgl',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
@@ -253,9 +284,9 @@ class RekapPage extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.all(8.0),
                                 // color: AppColors.primary,
-                                child: Text(
-                                  'Sch',
-                                  style: const TextStyle(
+                                child: const Text(
+                                  'Size',
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
@@ -267,9 +298,9 @@ class RekapPage extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.all(8.0),
                                 // color: AppColors.primary,
-                                child: Text(
-                                  'Akt',
-                                  style: const TextStyle(
+                                child: const Text(
+                                  'Qty',
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
@@ -277,27 +308,18 @@ class RekapPage extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            TableCell(
-                              child: Container(
-                                padding: EdgeInsets.zero,
-                                // color: AppColors.primary,
-                                child: Icon(
-                                  Icons.settings_outlined,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ),
-                            )
                           ],
                         ),
-                        ...data.map((item) {
+                        ...data.asMap().entries.map((entry) {
+                          int index = entry.key;
+                          Map<String, dynamic> item = entry.value;
                           return TableRow(
                             children: [
                               TableCell(
                                 child: Container(
                                   padding: const EdgeInsets.all(8.0),
                                   child: Text(
-                                    '${data.indexOf(item) + 1}',
+                                    '${index + 1}',
                                     textAlign: TextAlign.center,
                                   ),
                                 ),
@@ -305,15 +327,7 @@ class RekapPage extends StatelessWidget {
                               TableCell(
                                 child: Container(
                                   padding: const EdgeInsets.all(8.0),
-                                  child: Text(
-                                    item['itemcode'].toString(),
-                                  ),
-                                ),
-                              ),
-                              TableCell(
-                                child: Container(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(item['sch'].toString(),
+                                  child: Text(item['tglsg'].toString(),
                                       textAlign: TextAlign.center),
                                 ),
                               ),
@@ -321,37 +335,16 @@ class RekapPage extends StatelessWidget {
                                 child: Container(
                                   padding: const EdgeInsets.all(8.0),
                                   child: Text(
-                                    item['akt'].toString(),
-                                    textAlign: TextAlign.center,
+                                    item['sch'].split('_').first.toString(),
                                   ),
                                 ),
                               ),
                               TableCell(
                                 child: Container(
-                                    padding: EdgeInsets.zero,
-                                    child: IconButton(
-                                      onPressed: () {
-                                        Navigator.pushReplacement(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => DetailPage(
-                                              qcode_sch:
-                                                  item['qcode_sch'].toString(),
-                                              server: 'Server',
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                      icon: Icon(
-                                        Icons.info_outline,
-                                        color: Colors.blue[500],
-                                      ),
-                                    )
-                                    // Text(
-                                    //   item['qcode_sch'].toString(),
-                                    //   textAlign: TextAlign.center,
-                                    // ),
-                                    ),
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Text(item['qty'].toString(),
+                                      textAlign: TextAlign.center),
+                                ),
                               ),
                             ],
                           );
@@ -366,8 +359,44 @@ class RekapPage extends StatelessWidget {
             ],
           ),
         ),
-        bottomNavigationBar: const BottomNavbar(selectedIndex: 3),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            onPressed: () {
+              // DatabaseHelper().deleteAllAcl().then((value) => print('deleted'));
+              _uploadLocalData();
+            },
+            child: const Icon(Icons.cloud_upload_outlined, color: Colors.white,),
+            backgroundColor: Colors.green[600],
+            shape: const CircleBorder(),
+            heroTag: null,
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton(
+            child: const Icon(
+              Icons.delete_outline,
+              color: Colors.white,
+            ),
+            backgroundColor: Colors.red[600],
+            shape: const CircleBorder(),
+            onPressed: () {
+              // _deleteLocalData();
+              // DatabaseHelper().deleteCxs();
+              // print('local data deleted');
+              // DatabaseHelper().fetchDataLocalForUpload();
+              CustomNotification().notifConfirm(context, 'Apakah anda yakin ingin menghapus semua data lokal?', () {
+                DatabaseHelper().deleteAllAcl().then((value) => setState(() {
+                }));
+              });
+            },
+            heroTag: null,
+          ),
+        ],
+      ),
+      bottomNavigationBar: const BottomNavbar(selectedIndex: 4),
     );
   }
 }

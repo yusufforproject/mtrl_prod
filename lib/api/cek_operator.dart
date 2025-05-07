@@ -23,6 +23,7 @@ Future<bool> cekOpr(opr) async {
         Variable.oprName = firstItem['oprname'];
         print('ini oprcode: ${Variable.oprCode}');
         print('ini oprname: ${Variable.oprName}');
+        Variable.isLoggedIn = true;
         return true;
       } else {
         print('No data found');

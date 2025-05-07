@@ -21,8 +21,9 @@ class _ServerCheckerPageState extends State<ServerCheckerPage> {
   }
 
   Future<void> startChecking() async {
-    bool isOnline = await checkServerStatus();
-    if (isOnline) {
+    // await dotenv.load(fileName: '.env');
+    await checkServerStatus();
+    if (Variable.serverStatus == true) {
       print("Online");
     } else {
       print("Offline");
@@ -56,7 +57,7 @@ class _ServerCheckerPageState extends State<ServerCheckerPage> {
                       // if (snapshot.hasData) {
                       bool isOnline = snapshot.data!;
 
-                      // isOnline = true;
+                      // isOnline = false;
                       return AlertDialog(
                         shadowColor: Colors.black,
                         shape: RoundedRectangleBorder(
@@ -65,7 +66,7 @@ class _ServerCheckerPageState extends State<ServerCheckerPage> {
                         backgroundColor: Colors.white,
                         title: Row(
                           children: [
-                            Icon(isOnline ? Icons.network_wifi : Icons.error,
+                            Icon(isOnline ? Icons.network_wifi : Icons.wifi_off_outlined,
                                 color: isOnline
                                     ? AppColors.primary
                                     : Colors.red[600]),

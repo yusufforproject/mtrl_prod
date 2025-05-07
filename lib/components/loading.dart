@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 
 
-loading(BuildContext context, {String? message}) {
+loading(BuildContext context, {String? message, bool? barrierDismissible}) {
   showDialog(
       context: context,
+      barrierDismissible: barrierDismissible ?? true,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Row(

@@ -61,14 +61,14 @@ class _SrtJlnPageState extends State<SrtJlnPage> {
                 ],
               ),
               const SizedBox(height: 8),
-              CustomTextFormField(
-                controller: _itemAbc,
-                color: AppColors.lightblue,
-                icon: Icons.abc,
-                label: 'Item ABC',
-                boldText: true,
-                enabled: false,
-              ),
+              // CustomTextFormField(
+              //   controller: _itemAbc,
+              //   color: AppColors.lightblue,
+              //   icon: Icons.abc,
+              //   label: 'Item ABC',
+              //   boldText: true,
+              //   enabled: false,
+              // ),
               const SizedBox(
                 height: 8,
               ),
@@ -96,16 +96,16 @@ class _SrtJlnPageState extends State<SrtJlnPage> {
                   const SizedBox(
                     width: 8,
                   ),
-                  Expanded(
-                    child: CustomTextFormField(
-                      controller: _qtyRoll,
-                      color: AppColors.lightblue,
-                      icon: Icons.numbers,
-                      boldText: true,
-                      label: '',
-                      enabled: false,
-                    ),
-                  ),
+                  // Expanded(
+                  //   child: CustomTextFormField(
+                  //     controller: _qtyRoll,
+                  //     color: AppColors.lightblue,
+                  //     icon: Icons.numbers,
+                  //     boldText: true,
+                  //     label: '',
+                  //     enabled: false,
+                  //   ),
+                  // ),
                   const SizedBox(
                     width: 8,
                   ),
@@ -129,16 +129,16 @@ class _SrtJlnPageState extends State<SrtJlnPage> {
                   const SizedBox(
                     width: 8,
                   ),
-                  Expanded(
-                    child: CustomTextFormField(
-                      controller: _qtyMtr,
-                      color: AppColors.lightblue,
-                      icon: Icons.numbers,
-                      boldText: true,
-                      label: '',
-                      enabled: true,
-                    ),
-                  ),
+                  // Expanded(
+                  //   child: CustomTextFormField(
+                  //     controller: _qtyMtr,
+                  //     color: AppColors.lightblue,
+                  //     icon: Icons.numbers,
+                  //     boldText: true,
+                  //     label: '',
+                  //     enabled: true,
+                  //   ),
+                  // ),
                   const SizedBox(
                     width: 8,
                   ),

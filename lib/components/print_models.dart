@@ -10,9 +10,9 @@ class PrintModels {
     if (await PrintBluetoothThermal.connectionStatus) {
       final generator =
           Generator(PaperSize.mm58, await CapabilityProfile.load());
-      for (var i = 0; i < Variable.barcodesById.length; i++) {
+      for (var i = 0; i < Variable.barcodesForFetching.length; i++) {
         final bytes =
-            _generateBarcodeBytes(generator, Variable.barcodesById[i]);
+            _generateBarcodeBytes(generator, Variable.barcodesForFetching[i]);
         final result = await PrintBluetoothThermal.writeBytes(bytes);
         debugPrint("Print $result");
       }
@@ -24,10 +24,10 @@ class PrintModels {
     if (await PrintBluetoothThermal.connectionStatus) {
       final generator =
           Generator(PaperSize.mm58, await CapabilityProfile.load());
-      for (var i = 0; i < Variable.barcodesById.length; i++) {
-        if (Variable.barcodesById[i]['isChecked'] == true) {
+      for (var i = 0; i < Variable.barcodesForFetching.length; i++) {
+        if (Variable.barcodesForFetching[i]['isChecked'] == true) {
           final bytes =
-              _generateBarcodeBytes(generator, Variable.barcodesById[i]);
+              _generateBarcodeBytes(generator, Variable.barcodesForFetching[i]);
           final result = await PrintBluetoothThermal.writeBytes(bytes);
           debugPrint("Print $result");
         }
@@ -35,18 +35,25 @@ class PrintModels {
     }
   }
 
-  Future<void> printCheckedBySch() async {
+  Future<void> printLastBarcode() async {
     if (await PrintBluetoothThermal.connectionStatus) {
       final generator =
           Generator(PaperSize.mm58, await CapabilityProfile.load());
-      for (var i = 0; i < Variable.barcodesBySch.length; i++) {
-        if (Variable.barcodesBySch[i]['isChecked'] == true) {
-          final bytes =
-              _generateBarcodeBytes(generator, Variable.barcodesBySch[i]);
-          final result = await PrintBluetoothThermal.writeBytes(bytes);
-          debugPrint("Print $result");
-        }
-      }
+      final bytes =
+          _generateBarcodeBytes(generator, Variable.barcodesForFetching.last);
+      final result = await PrintBluetoothThermal.writeBytes(bytes);
+      debugPrint("Print $result");
+    }
+  }
+
+  Future<void> printEmrBarcode() async {
+    if (await PrintBluetoothThermal.connectionStatus) {
+      final generator =
+          Generator(PaperSize.mm58, await CapabilityProfile.load());
+      final bytes =
+          _generateBarcodeBytes(generator, Variable.barcodeEmr.first);
+      final result = await PrintBluetoothThermal.writeBytes(bytes);
+      debugPrint("Print $result");
     }
   }
 
@@ -62,28 +69,28 @@ class PrintModels {
           width: PosTextSize.size2,
         ),
       ),
-      if(Variable.sect != 'ABC')
-      ...generator.text(
-        barcode['descr'] ?? '',
-        styles: const PosStyles(
-          align: PosAlign.center,
-          height: PosTextSize.size1,
-          width: PosTextSize.size1,
+      if (Variable.sect != 'ABC' && Variable.serverStatus == true)
+        ...generator.text(
+          barcode['descr'] ?? '',
+          styles: const PosStyles(
+            align: PosAlign.center,
+            height: PosTextSize.size1,
+            width: PosTextSize.size1,
+          ),
         ),
-      ),
       ...generator.text(
         '',
       ),
-      ...generator.qrcode(barcode['bc_entried'],
+      ...generator.qrcode(barcode['bc_entried'].substring(0, 1) == 'R' ? barcode['bc_alias'] : barcode['bc_entried'],
           size: QRSize.Size6, cor: QRCorrection.H, align: PosAlign.center),
       ...generator.text(' '),
       ...generator.text(
         (() {
           final idTag = barcode['idtag'] ?? '';
-          final index = Variable.barcodesById.indexOf(barcode) + 1;
+          final index = Variable.barcodesForFetching.indexOf(barcode) + 1;
           switch (Variable.sect) {
             case 'ACL':
-              return '${barcode['idprint'] ?? ''}-${barcode['idroll'] ?? ''}  #$index';
+              return 'ROLL: ${barcode['idprint'] ?? ''}-${barcode['idroll'] ?? ''}';
             case 'ABC':
               return '$idTag  #$index';
             case 'ASQ':
@@ -99,7 +106,7 @@ class PrintModels {
           width: PosTextSize.size2,
         ),
       ),
-      ...generator.text(barcode['bc_entried'].split('_').last,
+      ...generator.text(barcode['bc_entried'].substring(0, 1) == 'R' ? barcode['bc_alias'].split(' ').last : barcode['bc_entried'].split('_').last,
           styles: const PosStyles(
             align: PosAlign.center,
             height: PosTextSize.size1,
@@ -131,7 +138,14 @@ class PrintModels {
         ),
       ),
       ...generator.text(
-        'QTY : ${barcode['qty'] ?? ''} ${barcode['uom'] ?? ''}',
+        ((){
+          switch (Variable.sect) {
+            case 'ACL':
+              return 'QTY : ${barcode['qty'] ?? ''} MTR';
+            default:
+              return 'QTY : ${barcode['qty'] ?? ''} ${Variable.uomBySect}';
+          }
+        })(),
         styles: const PosStyles(
           bold: true,
           align: PosAlign.center,
@@ -139,6 +153,15 @@ class PrintModels {
           width: PosTextSize.size1,
         ),
         linesAfter: 1,
+      ),
+      if(Variable.sect == 'ACL')
+      ...generator.text(
+        '[  ]',
+        styles: const PosStyles(
+          align: PosAlign.center,
+          height: PosTextSize.size1,
+          width: PosTextSize.size1,
+        ),
       ),
       ...generator.text(
         '${barcode['created_at'] ?? ''}',
@@ -160,96 +183,97 @@ class PrintModels {
     ];
   }
 }
-  List<int> _generateBarcodeACL(
-      Generator generator, Map<String, dynamic> barcode) {
-    return [
-      ...generator.text(
-        (barcode['bc_entried'] ?? '').split('_').first,
-        styles: const PosStyles(
-          align: PosAlign.center,
-          bold: true,
-          height: PosTextSize.size2,
-          width: PosTextSize.size2,
-        ),
+
+List<int> _generateBarcodeACL(
+    Generator generator, Map<String, dynamic> barcode) {
+  return [
+    ...generator.text(
+      (barcode['bc_entried'] ?? '').split('_').first,
+      styles: const PosStyles(
+        align: PosAlign.center,
+        bold: true,
+        height: PosTextSize.size2,
+        width: PosTextSize.size2,
       ),
-      ...generator.text(
-        barcode['descr'] ?? '',
-        styles: const PosStyles(
-          align: PosAlign.center,
-          height: PosTextSize.size1,
-          width: PosTextSize.size1,
-        ),
-        linesAfter: 1,
+    ),
+    ...generator.text(
+      barcode['descr'] ?? '',
+      styles: const PosStyles(
+        align: PosAlign.center,
+        height: PosTextSize.size1,
+        width: PosTextSize.size1,
       ),
-      ...generator.qrcode(barcode['bc_entried'],
-          size: QRSize.Size6, cor: QRCorrection.H, align: PosAlign.center),
-      ...generator.text(' '),
-      ...generator.text(
-        'ROLL: ${barcode['idprint'] ?? ''}-${barcode['idroll'] ?? ''}  #${Variable.barcodesBySch.indexOf(barcode) + 1}',
-        styles: const PosStyles(
-          bold: true,
-          align: PosAlign.center,
-          height: PosTextSize.size1,
-          width: PosTextSize.size2,
-        ),
+      linesAfter: 1,
+    ),
+    ...generator.qrcode(barcode['bc_entried'],
+        size: QRSize.Size6, cor: QRCorrection.H, align: PosAlign.center),
+    ...generator.text(' '),
+    ...generator.text(
+      'ROLL: ${barcode['idprint'] ?? ''}-${barcode['idroll'] ?? ''}  #${Variable.barcodesForFetching.indexOf(barcode) + 1}',
+      styles: const PosStyles(
+        bold: true,
+        align: PosAlign.center,
+        height: PosTextSize.size1,
+        width: PosTextSize.size2,
       ),
-      ...generator.text(barcode['bc_entried'].split('_').last,
-          styles: const PosStyles(
-            align: PosAlign.center,
-            height: PosTextSize.size1,
-            width: PosTextSize.size1,
-          ),
-          linesAfter: 1),
-      ...generator.text(
-        '${barcode['merge_time'] ?? ''} | ${barcode['mcn'] ?? ''}',
+    ),
+    ...generator.text(barcode['bc_entried'].split('_').last,
         styles: const PosStyles(
           align: PosAlign.center,
           height: PosTextSize.size1,
           width: PosTextSize.size1,
         ),
+        linesAfter: 1),
+    ...generator.text(
+      '${barcode['merge_time'] ?? ''} | ${barcode['mcn'] ?? ''}',
+      styles: const PosStyles(
+        align: PosAlign.center,
+        height: PosTextSize.size1,
+        width: PosTextSize.size1,
       ),
-      ...generator.text(
-        'EXP : ${barcode['expireddt'] ?? ''}',
-        styles: const PosStyles(
-          align: PosAlign.center,
-          height: PosTextSize.size1,
-          width: PosTextSize.size1,
-        ),
+    ),
+    ...generator.text(
+      'EXP : ${barcode['expireddt'] ?? ''}',
+      styles: const PosStyles(
+        align: PosAlign.center,
+        height: PosTextSize.size1,
+        width: PosTextSize.size1,
       ),
-      ...generator.text(
-        'PIC : ${(barcode['opr'] ?? '')}_${(barcode['oprname'] ?? '').padRight(18).substring(0, 18)}',
-        styles: const PosStyles(
-          align: PosAlign.center,
-          height: PosTextSize.size1,
-          width: PosTextSize.size1,
-        ),
+    ),
+    ...generator.text(
+      'PIC : ${(barcode['opr'] ?? '')}_${(barcode['oprname'] ?? '').padRight(18).substring(0, 18)}',
+      styles: const PosStyles(
+        align: PosAlign.center,
+        height: PosTextSize.size1,
+        width: PosTextSize.size1,
       ),
-      ...generator.text(
-        'QTY : ${barcode['qty'] ?? ''} ${Variable.uomBySect}',
-        styles: const PosStyles(
-          bold: true,
-          align: PosAlign.center,
-          height: PosTextSize.size1,
-          width: PosTextSize.size1,
-        ),
-        linesAfter: 1,
+    ),
+    ...generator.text(
+      'QTY : ${barcode['qty'] ?? ''} ${Variable.uomBySect}',
+      styles: const PosStyles(
+        bold: true,
+        align: PosAlign.center,
+        height: PosTextSize.size1,
+        width: PosTextSize.size1,
       ),
-      ...generator.text(
-        '${barcode['created_at'] ?? ''}',
-        styles: const PosStyles(
-          align: PosAlign.center,
-          height: PosTextSize.size1,
-          width: PosTextSize.size1,
-        ),
+      linesAfter: 1,
+    ),
+    ...generator.text(
+      '${barcode['created_at'] ?? ''}',
+      styles: const PosStyles(
+        align: PosAlign.center,
+        height: PosTextSize.size1,
+        width: PosTextSize.size1,
       ),
-      ...generator.text(
-        '------------------------------',
-        styles: const PosStyles(
-          align: PosAlign.center,
-          height: PosTextSize.size1,
-          width: PosTextSize.size1,
-        ),
-        linesAfter: 1,
+    ),
+    ...generator.text(
+      '------------------------------',
+      styles: const PosStyles(
+        align: PosAlign.center,
+        height: PosTextSize.size1,
+        width: PosTextSize.size1,
       ),
-    ];
-  }
+      linesAfter: 1,
+    ),
+  ];
+}

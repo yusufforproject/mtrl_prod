@@ -6,8 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 
 import '../api/cek_server.dart';
+import '../components/custom_notif.dart';
 import '../components/loading.dart';
-import '../data/database_helper.dart';
 import '../api/cek_operator.dart';
 import '../api/get_dateshift.dart';
 import '../api/get_items.dart';
@@ -50,6 +50,19 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _penneng.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkServerStatus() async {
+    Variable.serverStatus = await checkServerStatus();
+    // Variable.serverStatus = false;
+    if (Variable.serverStatus == true) {
+      CustomNotification().networkOk(context);
+    } else {
+      CustomNotification().networkError(context);
+    }
+    setState(() {
+      
+    });
   }
 
   Future<void> _initData() async {
@@ -201,31 +214,6 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  Future<void> _usingOffline() async {
-    final dbHelper = DatabaseHelper();
-    final db = await sqflite.openDatabase('abc_prod.db');
-
-// Save a message
-    // await dbHelper.insertMessage("Hello, this is offline!");
-    print(db);
-
-// Retrieve messages
-    List<Map<String, dynamic>> messages = await dbHelper.getMessages();
-    for (var msg in messages) {
-      print("Message: ${msg['text']}");
-    }
-  }
-
-  Future<void> printAllMessages() async {
-    final db = await sqflite.openDatabase('abc_prod.db');
-    List<Map<String, dynamic>> messages = await db.query('messages');
-
-    for (var msg in messages) {
-      print(
-          "ID: ${msg['id']}, Text: ${msg['text']}, Timestamp: ${msg['timestamp']}");
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -255,7 +243,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
                       child: Text(
-                        Variable.serverStatus! ? 'Server Online' : 'Offline Mode',
+                        Variable.serverStatus! ? 'Online' : 'Offline',
                         
                         style: TextStyle(
                         

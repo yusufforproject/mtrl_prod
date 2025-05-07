@@ -1,9 +1,13 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+// void main() async {
+//   await dotenv.load();
+// }
+
 class Variable {
   static String baseUrl = dotenv.env['BASE_URL']!;
   static String mixIP = dotenv.env['MIX_URL']!;
-  static String sect = 'ABC';
+  static String sect = 'ACL';
   static String get sectDescription {
     switch (sect) {
       case 'ABG':
@@ -59,7 +63,7 @@ class Variable {
 
   static var appName = "MATERIAL PROD";
   static var appSubtitle = "Material Production";
-  static var appVersion = "v2.0.0 - 25.02";
+  static var appVersion = "v2.1.0 - 25.03";
   static var dvcId = "SC23001";
   static var dvcPlaced = "Office";
 
@@ -73,8 +77,9 @@ class Variable {
         ];
       case 'ACL':
         return [
-          {'mcn': 'ACL01'},
-          {'mcn': 'ACL02'},
+          {'mcn': 'ACL1'},
+          {'mcn': 'ACL2'},
+          {'mcn': 'TEST'},
           // Add more machines as needed
         ];
       case 'ABC':
@@ -109,22 +114,57 @@ class Variable {
     }
   }
 
+  static String get idRoll {
+    switch (mcnSelected) {
+      case 'ACL1':
+        return 'A';
+      case 'ACL2':
+        return 'B';
+      // Add more cases as needed
+      default:
+        return '-';
+    }
+  }
+
   // data by system
   static var dateSys = "";
   static var shfSys = "";
   static var groupSys = "";
   static List<Map<String, dynamic>> mcnList = [];
   static List<Map<String, dynamic>> items = [];
-  static List<Map<String, dynamic>> barcodes = [];
+  static List<Map<String, dynamic>> barcodesForRekap = [];
   static List<Map<String, dynamic>> schedules = [];
   static List<Map<String, dynamic>> suratJalan = [];
   static List<Map<String, dynamic>> parent = [];
   static List<Map<String, dynamic>> bom = [];
-  static List<Map<String, dynamic>> barcodesBySch = [];
-  static List<Map<String, dynamic>> barcodesById = [];
+  // static List<Map<String, dynamic>> barcodesBySch = [];
+  // static List<Map<String, dynamic>> barcodesById = [];
+  static List<Map<String, dynamic>> barcodesForFetching = [];
+  static List<Map<String, dynamic>> barcodesLocal = [];
+  static List<Map<String, dynamic>> allBarcodesLocal = [];
   static List<Map<String, dynamic>> treatmentDetails = [];
+  static List<Map<String, dynamic>> detailsBarcode = [];
   static var totQtySch = "";
   static bool? serverStatus;
+  static List<Map<String, dynamic>> barcodeEmr = [
+    {
+      'bc_entried': '',
+      'descr': '',
+      'qty': '',
+      'uom': '',
+      'mcn': '',
+      'opr': '',
+      'oprname': '',
+      'expireddt': '',
+      'merge_time': '',
+      'merge_date': '',
+      'idprint': '',
+      'idroll': '',
+      'created_at': '',
+    }
+  ];
+  static List<Map<String, dynamic>> materials = [];
+  static int valcount = 0;
 
   // data from user
   static var pickedDate = "";
@@ -138,6 +178,11 @@ class Variable {
   // data operator
   static var oprCode = "";
   static var oprName = "";
+
+  static bool? isLoggedIn = false;
+
+  //data offline
+  static int? offlineNoRoll;
 
 // data treatment
   // static var bcEntried = "";

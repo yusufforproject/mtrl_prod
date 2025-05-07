@@ -1,38 +1,20 @@
-  import 'package:flutter/material.dart';
+import '../core/variable.dart';
 
-bool _validateSave(dynamic _qtyController, dynamic _materialController, BuildContext context) {
-    if (_materialController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Material harus diisi"),
-          duration: Duration(seconds: 3),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return false;
-    }
-
-    if (_qtyController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Jumlah harus diisi"),
-          duration: Duration(seconds: 3),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return false;
-    }
-
-    if (int.parse(_qtyController.text) <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Jumlah harus lebih dari 0"),
-          duration: Duration(seconds: 3),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return false;
-    }
-
-    return true;
+Future<String> validationAcl() async {
+  if (Variable.materials.isEmpty) {
+    return 'empty';
   }
+  if (Variable.serverStatus == true) {
+    for (var bom in Variable.bom) {
+      if (!Variable.materials.any((material) => material['item_mtrl'] == bom['child'])) {
+      return 'unmatch';
+      }
+    }
+    if (Variable.schedules[0]['act'] > Variable.schedules[0]['qtysch']) {
+      return 'over';
+    }
+    return 'ok';
+  } else {
+    return 'ok';
+  }
+}

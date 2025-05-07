@@ -5,9 +5,9 @@ import 'dart:convert';
 import '../core/variable.dart';
 
 Future<bool> getSchedule(qrSch) async {
-  if (Variable.serverStatus == false) {
-    return false;
-  } else {
+  // if (Variable.serverStatus == false) {
+  //   return false;
+  // } else {
     try {
       final response = await http.get(
         Uri.parse('${Variable.baseUrl}/apis/get_schedule.php?qrcode=$qrSch'),
@@ -71,7 +71,7 @@ Future<bool> getSchedule(qrSch) async {
       return false;
     }
   }
-}
+// }
 
 Future<bool> getSuratJalan() async {
   if (Variable.serverStatus == false) {

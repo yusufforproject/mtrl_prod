@@ -5,52 +5,51 @@ import 'package:intl/intl.dart';
 
 import '../core/variable.dart';
 
+var getDt = Variable.pickedDate.isEmpty
+    ? DateFormat('yyyy-MM-dd')
+        .format(DateFormat('dd/MM/yyyy').parse(Variable.dateSys))
+    : DateFormat('yyyy-MM-dd')
+        .format(DateFormat('dd/MM/yyyy').parse(Variable.pickedDate));
+var shf = Variable.pickedDate.isEmpty ? Variable.shfSys : Variable.shift;
+var grp = Variable.pickedDate.isEmpty ? Variable.groupSys : Variable.group;
 Future<bool> getBarcodes() async {
-  if (Variable.serverStatus == false) {
-    return false;
-  } else {
-    try {
-      var getDt = Variable.pickedDate.isEmpty
-          ? DateFormat('yyyy-MM-dd')
-              .format(DateFormat('dd/MM/yyyy').parse(Variable.dateSys))
-          : DateFormat('yyyy-MM-dd')
-              .format(DateFormat('dd/MM/yyyy').parse(Variable.pickedDate));
-      final response = await http.get(
-        Uri.parse(
-            '${Variable.baseUrl}/apis/get_barcodes.php?dt=$getDt&opr=${Variable.oprCode}&mcn=${Variable.mcnSelected}'),
-      );
-      print(response.body);
+  try {
+    final response = await http.get(
+      Uri.parse(
+          '${Variable.baseUrl}/apis/get_barcodes.php?dt=$getDt&opr=${Variable.oprCode}&sec=${Variable.sect}${Variable.subSec}'),
+    );
+    print(response.body);
 
-      if (response.statusCode == 200) {
-        Map<String, dynamic> data = jsonDecode(response.body);
-        if (data.containsKey('data')) {
-          List<dynamic> dataBarcodes = data['data'];
-          Variable.barcodes = [];
-          dataBarcodes.forEach((item) {
-            Variable.barcodes.add({
-              'size': item['size'],
-              'qcode_sch': item['qcode_sch'],
-              'qtysch': item['qtysch'],
-              'akt': item['akt'],
-            });
+    if (response.statusCode == 200) {
+      Map<String, dynamic> data = jsonDecode(response.body);
+      if (data.containsKey('data')) {
+        List<dynamic> dataBarcodes = data['data'];
+        Variable.barcodesForRekap = [];
+        dataBarcodes.forEach((item) {
+          Variable.barcodesForRekap.add({
+            'itemcode': item['itemcode'],
+            'qcode_sch': item['qcode_sch'],
+            'sch': item['sch'],
+            'akt': item['akt'],
+            'ydate_shift': item['ydate_shift'],
           });
-          print(
-              'ini barcodes: ${Variable.barcodes}'); // print(Variable.mcnList);
-          print(
-              'ini barcodes.length: ${Variable.barcodes.length}'); // print(Variable.mcnList);
-          return true;
-        } else {
-          print('No barcodes found');
-          return false;
-        }
+        });
+        print(
+            'ini barcodesForRekap: ${Variable.barcodesForRekap}'); // print(Variable.mcnList);
+        print(
+            'ini barcodes.length: ${Variable.barcodesForRekap.length}'); // print(Variable.mcnList);
+        return true;
       } else {
-        print('Server error: ${response.statusCode}');
+        print('No barcodes found');
         return false;
       }
-    } catch (e) {
-      print('Error occurred: $e');
+    } else {
+      print('Server error: ${response.statusCode}');
       return false;
     }
+  } catch (e) {
+    print('Error occurred: $e');
+    return false;
   }
 }
 
@@ -72,9 +71,9 @@ Future<bool> getBarcodesById() async {
         Map<String, dynamic> data = jsonDecode(response.body);
         if (data.containsKey('data')) {
           List<dynamic> dataBarcodes = data['data'];
-          Variable.barcodesById = [];
+          Variable.barcodesForFetching = [];
           dataBarcodes.forEach((item) {
-            Variable.barcodesById.add({
+            Variable.barcodesForFetching.add({
               'bc_entried': item['bc_entried'],
               'expireddt': item['expireddt'],
               'merge_time': item['merge_time'],
@@ -90,9 +89,9 @@ Future<bool> getBarcodesById() async {
             });
           });
           print(
-              'ini barcodes by id: ${Variable.barcodesById}'); // print(Variable.mcnList);
+              'ini barcodes for fetching: ${Variable.barcodesForFetching}'); // print(Variable.mcnList);
           print(
-              'ini barcodes.length: ${Variable.barcodesById.length}'); // print(Variable.mcnList);
+              'ini barcodes.length: ${Variable.barcodesForFetching.length}'); // print(Variable.mcnList);
           return true;
         } else {
           print('No barcodes found');
@@ -116,7 +115,7 @@ Future<bool> getBarcodesBySch() async {
     try {
       final response = await http.get(
         Uri.parse(
-            '${Variable.baseUrl}/apis/get_barcodes_by_sch.php?qrcode=${Variable.schedules[0]['qcode_sch']}'),
+            '${Variable.baseUrl}/apis/get_barcodes_by_sch.php?qcode_sch=${Variable.schedules[0]['qcode_sch']}'),
         // body: {
         //   'sec': '${Variable.sect}${Variable.subSec}',
         // },
@@ -127,10 +126,11 @@ Future<bool> getBarcodesBySch() async {
         Map<String, dynamic> data = jsonDecode(response.body);
         if (data.containsKey('data')) {
           List<dynamic> dataBarcodes = data['data'];
-          Variable.barcodesBySch = [];
+          Variable.barcodesForFetching = [];
           for (var item in dataBarcodes) {
-            Variable.barcodesBySch.add({
+            Variable.barcodesForFetching.add({
               'bc_entried': item['bc_entried'],
+              'bc_alias': item['bc_alias'],
               'expireddt': item['expireddt'],
               'merge_time': item['merge_time'],
               'idprint': item['idprint'],
@@ -139,7 +139,7 @@ Future<bool> getBarcodesBySch() async {
               'descr': item['descr'],
               'mcn': item['mcn'],
               'opr': item['opr'],
-              'oprname': item['oprname'],
+              'oprname': item['oprname'].trim(),
               'qty': item['qty'],
               'uom': item['uom'],
               'created_at': item['created_at'],
@@ -147,9 +147,9 @@ Future<bool> getBarcodesBySch() async {
             });
           }
           print(
-              'ini barcodes by sch: ${Variable.barcodesBySch}'); // print(Variable.mcnList);
+              'ini barcodes for fetching: ${Variable.barcodesForFetching}'); // print(Variable.mcnList);
           print(
-              'ini barcodes.length: ${Variable.barcodesBySch.length}'); // print(Variable.mcnList);
+              'ini barcodes.length: ${Variable.barcodesForFetching.length}'); // print(Variable.mcnList);
           return true;
         } else {
           print('No barcodes found');
@@ -163,5 +163,42 @@ Future<bool> getBarcodesBySch() async {
       print('Error occurred: $e');
       return false;
     }
+  }
+}
+
+Future<void> getDetailsBarcode(qcodeSch) async {
+  print('ini qcodeSch: $qcodeSch');
+  print('ini getDt: $getDt');
+  print('ini shf: $shf');
+  print('ini grp: $grp');
+  print('ini mcn: ${Variable.mcnSelected}');
+  print('ini opr: ${Variable.oprCode}');
+  print('ini sec: ${Variable.sect}${Variable.subSec}');
+  try {
+    final response = await http.get(
+      Uri.parse(
+          '${Variable.baseUrl}/apis/get_details.php?qcode_sch=$qcodeSch&dt=$getDt&shf=$shf&grp=$grp&mcn=${Variable.mcnSelected}&opr=${Variable.oprCode}&sec=${Variable.sect}${Variable.subSec}'),
+    );
+    print(response.body);
+
+    if (response.statusCode == 200) {
+      Map<String, dynamic> data = jsonDecode(response.body);
+      if (data.containsKey('data')) {
+        List<dynamic> dataBarcodes = data['data'];
+        Variable.detailsBarcode = [];
+        dataBarcodes.forEach((item) {
+          Variable.detailsBarcode.add({
+            'bc_entried': item['bc_entried'],
+            'idprint': item['idprint'],
+            'idroll': item['idroll'],
+            'txndate': item['txndate'],
+            'qty': item['qty'],
+          });
+        });
+        print('ini detailsBarcode: ${Variable.detailsBarcode}');
+      }
+    }
+  } catch (e) {
+    print('Error occurred: $e');
   }
 }

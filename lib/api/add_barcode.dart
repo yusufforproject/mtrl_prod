@@ -26,3 +26,27 @@ Future<bool> addNewBarcode(String qty) async {
     return false;
   }
 }
+Future<bool> addBarcodeAcl(String qty) async {
+  Variable.idPrint = (Variable.valcount! + 1).toString();
+  final response = await http.post(
+    Uri.parse('${Variable.baseUrl}/apis/acl/add_barcode.php'),
+    body: {
+      'tglsg': Variable.pickedDate.isEmpty ? '${Variable.dateSys}_${Variable.shfSys}${Variable.groupSys}' : '${Variable.pickedDate}_${Variable.shift}${Variable.group}',
+      'mcn': Variable.mcnSelected,
+      'size': Variable.schedules[0]['size'],
+      'qty': qty,
+      'opr': Variable.oprCode,
+      'idprint': Variable.idPrint,
+      'idroll': Variable.idRoll,
+      'qcode_sch': Variable.schedules[0]['qcode_sch'],
+      'mtrl': Variable.materials.map((material) => material['qcode_mtrl']).join(';'),
+      'section': Variable.sect,
+    },
+  );
+
+  if (response.statusCode == 200) {
+    return true;
+  } else {
+    return false;
+  }
+}

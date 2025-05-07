@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/cek_server.dart';
 import '../core/app_colors.dart';
 import '../core/variable.dart';
 
@@ -27,14 +28,15 @@ class _BottomNavbarState extends State<BottomNavbar> {
   }
 
   // func tappedNavBottom
-  void _onItemTapped(int index) {
+  void _onItemTapped(int index) async {
+    await checkServerStatus();
     setState(() {
       _selectedIndex = index;
     });
     // switch case when tapped icon navbottom
     switch (index) {
       case 0:
-        Navigator.pushReplacementNamed(context, '/home');
+        Navigator.pushReplacementNamed(context, '/login');
         break;
       case 1:
         Navigator.pushReplacementNamed(context, '/prod');
@@ -45,22 +47,23 @@ class _BottomNavbarState extends State<BottomNavbar> {
             context: context,
             builder: (BuildContext context) {
               return AlertDialog(
+                backgroundColor: Colors.red[600],
                 title: Row(
                   children: [
-                    Icon(Icons.warning, color: Colors.red[600]),
+                    Icon(Icons.warning, color: Colors.white, size: 30),
                     const SizedBox(width: 8),
                     Text(
-                      'No Schedule Found',
+                      'NO SCHEDULE',
                       style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.red[600],
+                          fontSize: 18,
+                          color: Colors.white,
                           fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
                 content: const Text(
-                  'Silahkan scan schedule terlebih dahulu',
-                  style: TextStyle(color: Colors.black),
+                  'SILAHKAN SCAN SCHEDULE',
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 actions: <Widget>[
                   TextButton(
@@ -72,17 +75,23 @@ class _BottomNavbarState extends State<BottomNavbar> {
                       Navigator.of(context).pop();
                       Navigator.pushReplacementNamed(context, '/prod');
                     },
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.white,
+                    ),
                   ),
                 ],
               );
             },
           );
         } else {
-          Navigator.pushReplacementNamed(context, '/mtrl');
+          Navigator.pushReplacementNamed(context, '/mtrl_acl');
         }
         break;
       case 3:
         Navigator.pushReplacementNamed(context, '/rekap');
+        break;
+      case 4:
+        Navigator.pushReplacementNamed(context, '/lokal');
         break;
     }
   }
@@ -109,10 +118,10 @@ class _BottomNavbarState extends State<BottomNavbar> {
           icon: Icon(Icons.file_copy_outlined),
           label: 'Rekap',
         ),
-        // BottomNavigationBarItem(
-        //   icon: Icon(Icons.print),
-        //   label: 'Print',
-        // ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.wifi_off_outlined),
+          label: 'Lokal',
+        ),
       ],
       // to tracking indexSelected from ontapped
       currentIndex: _selectedIndex,

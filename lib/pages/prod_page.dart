@@ -3,7 +3,13 @@ import 'dart:ffi';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import 'package:mtrl_prod/api/acl/get_valcount.dart';
+import 'package:mtrl_prod/api/cek_server.dart';
+import 'package:mtrl_prod/components/custom_notif.dart';
 import 'package:mtrl_prod/components/loading.dart';
+import 'package:mtrl_prod/components/validation.dart';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import '../components/print_models.dart';
 import '../api/get_barcode.dart';
 import '../api/add_barcode.dart';
@@ -13,8 +19,8 @@ import '../components/custom_appbar.dart';
 import '../components/bottom_nav.dart';
 import '../components/uppercase.dart';
 import '../core/app_colors.dart';
+import '../core/sqflite_data.dart';
 import '../core/variable.dart';
-import '../data/database_helper.dart';
 
 class ProdPage extends StatefulWidget {
   const ProdPage({super.key});
@@ -27,54 +33,143 @@ class _ProdPageState extends State<ProdPage> {
   // final TextEditingController schController = Variable.schedules.isNotEmpty
   //     ? TextEditingController(text: Variable.schedules[0]['qcode_sch'])
   //     : TextEditingController();
-  final TextEditingController schController = TextEditingController();
+  final TextEditingController schController = Variable.schedules.isEmpty
+      ? TextEditingController()
+      : TextEditingController(text: Variable.schedules[0]['qcode_sch']);
   final TextEditingController qtyController = TextEditingController();
+  final TextEditingController noRollController = Variable.offlineNoRoll != null
+      ? TextEditingController(text: Variable.offlineNoRoll.toString())
+      : TextEditingController();
   String? searchItem;
 
   @override
   void initState() {
+    WidgetsFlutterBinding.ensureInitialized();
     super.initState();
-    // fetchBarcodeBySch();
+    fetchBarcodeBySch();
     // _scanSchedule();
+    _getValCount();
+  }
+
+  Future<void> _getValCount() async {
+    await checkServerStatus();
+    if (Variable.serverStatus == true) {
+      final result = await getValcount();
+      if (Variable.schedules.isNotEmpty) {
+        await getSchedule(Variable.schedules[0]['qcode_sch']);
+      }
+      if (result) {
+        setState(() {});
+      }
+    }
   }
 
   Future<void> addBarcode() async {
     // await getSchedule();
     Variable.qtyInput = qtyController.text;
-    if (Variable.serverStatus == true) {
-      bool isSuccess;
-      isSuccess = await addNewBarcode(qtyController.text);
-      if (isSuccess) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Barcode added successfully"),
-            duration: Duration(seconds: 3),
-            backgroundColor: Colors.green,
-          ),
-        );
-        setState(() {
-          fetchBarcodeById();
-          // Navigator.pushReplacementNamed(context, '/prod');
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Failed to add barcode'),
-          duration: Duration(seconds: 3),
-          backgroundColor: Colors.red,
-        ));
-      }
+    final result = await validationAcl();
+    if (result == 'empty') {
+      CustomNotification().materialEmpty(context);
+    } else if (result == 'unmatch') {
+      CustomNotification().unmatchMaterial(context);
+    } else if (result == 'over') {
+      CustomNotification().overSchedule(context);
     } else {
-      // await DatabaseHelper().insertAbcBarcode(int.parse(qtyController.text));
-      await DatabaseHelper().insertAbcBarcode(int.parse(Variable.qtyInput));
+      await checkServerStatus();
+      if (Variable.serverStatus == true) {
+        bool isSuccess;
+        isSuccess = await addBarcodeAcl(qtyController.text);
+        if (isSuccess) {
+          setState(() {
+            fetchBarcodeBySch();
+            _getValCount();
+          });
+          CustomNotification().notifOk(context);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Failed to add barcode'),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ));
+        }
+      } else {
+        //   'tglsg': Variable.pickedDate.isEmpty ? '${Variable.dateSys}_${Variable.shfSys}${Variable.groupSys}' : '${Variable.pickedDate}_${Variable.shift}${Variable.group}',
+        // 'mcn': Variable.mcnSelected,
+        // 'size': Variable.schedules[0]['size'],
+        // 'qty': qty,
+        // 'opr': Variable.oprCode,
+        // 'idprint': Variable.idPrint,
+        // 'idroll': Variable.idRoll,
+        // 'qcode_sch': Variable.schedules[0]['qcode_sch'],
+        // 'mtrl': Variable.materials.map((material) => material['qcode_mtrl']).join(';'),
+        // 'section': Variable.sect,
+        Variable.offlineNoRoll = int.parse(noRollController.text) + 1;
+        var tgl =
+            Variable.pickedDate != '' ? Variable.pickedDate : Variable.dateSys;
+        var tglYmd =
+            tgl.substring(6, 10) + tgl.substring(3, 5) + tgl.substring(0, 2);
+        var sifGrup = Variable.pickedDate != ''
+            ? '${Variable.shift}${Variable.group}'
+            : '${Variable.shfSys}${Variable.groupSys}';
+        // var parsedDate = DateTime.tryParse(Variable.pickedDate) ?? DateTime.now();
+        var expDate = DateFormat('dd/MM/yyyy')
+            .format(DateTime.parse(tglYmd).add(const Duration(days: 4)));
+        var txnKey =
+            '${Variable.mcnSelected}-${DateFormat('yyyyMMddhhmmssa').format(DateTime.now())}${(1000000000 + (9999999999 - 1000000000) * (DateTime.now().microsecond / 1000000)).toInt()}_';
+
+        var padItem = Variable.schedules[0]['size'].padRight(10, ' ');
+        Map<String, String> monthArray = {
+          '01': '1',
+          '02': '2',
+          '03': '3',
+          '04': '4',
+          '05': '5',
+          '06': '6',
+          '07': '7',
+          '08': '8',
+          '09': '9',
+          '10': 'O',
+          '11': 'N',
+          '12': 'D'
+        };
+        var mY = '${monthArray[tgl.substring(3,5)]}${tgl.substring(9, 10)}';
+        var padCounter = Variable.offlineNoRoll.toString().padLeft(5, '0');
+        DatabaseHelper().insertAcl({
+          'txn_key': txnKey,
+          'bc_entried':
+              "${Variable.schedules[0]['size']}_${DateTime.now().millisecondsSinceEpoch}",
+          'bc_alias': '$padItem$mY$padCounter',
+          'tglsg': '${tgl}_$sifGrup',
+          'expdt': expDate,
+          'qty': qtyController.text,
+          'mcn': Variable.mcnSelected,
+          'opr': Variable.oprCode,
+          'sch': Variable.schedules[0]['qcode_sch'],
+          'mtrl': Variable.materials
+              .map((material) => material['qcode_mtrl'])
+              .join(';'),
+          'idprint': Variable.offlineNoRoll.toString(),
+          'idroll': Variable.idRoll,
+          'section': Variable.sect,
+          'created_at':
+              DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+          'txn_date': DateFormat('dd/MM/yyyy hh:mm:ss a').format(DateTime.now())
+        });
+        setState(() {
+          Navigator.popAndPushNamed(context, '/prod');
+        });
+        CustomNotification().notifOk(context);
+      }
     }
   }
 
-  Future<void> fetchBarcodeById() async {
+  Future<void> fetchBarcodeBySch() async {
     // await getSchedule();
-    if (Variable.serverStatus == true) {
-      bool isSuccess = false;
-      if (Variable.schedules.isNotEmpty) {
-        isSuccess = await getBarcodesById();
+    if (Variable.schedules.isNotEmpty) {
+      await checkServerStatus();
+      if (Variable.serverStatus == true) {
+        bool isSuccess = false;
+        isSuccess = await getBarcodesBySch();
         if (isSuccess) {
           // ScaffoldMessenger.of(context).showSnackBar(
           //   const SnackBar(
@@ -91,39 +186,65 @@ class _ProdPageState extends State<ProdPage> {
             backgroundColor: Colors.red,
           ));
         }
+      } else {
+        Variable.barcodesForFetching = [];
+        List<dynamic> dataBarcodes = await DatabaseHelper()
+            .fetchDataLocalAcl(Variable.schedules[0]['qcode_sch']);
+        for (var item in dataBarcodes) {
+          Variable.barcodesForFetching.add({
+            'bc_entried': item['bc_entried'],
+            'bc_alias': item['bc_alias'],
+            'expireddt': item['expdt'],
+            'merge_time': item['tglsg'],
+            'idprint': item['idprint'],
+            'idroll': item['idroll'],
+            'mcn': item['mcn'],
+            'opr': item['opr'],
+            'qty': item['qty'],
+            'created_at': item['created_at'],
+            'txn_date': item['txn_date'],
+            'isChecked': false,
+          });
+        }
+        Variable.schedules[0]['act'] =
+            Variable.barcodesForFetching.length.toString();
+        // print('ini dataBarcodes: $dataBarcodes');
+        print('barcodes for fetching: ${Variable.barcodesForFetching}');
+        setState(() {});
+        // Variable.barcodesById.add({
+        //   'bc_entried': Variable.schedules[0]['qcode_sch'],
+        // });
       }
-    } else {
-      Variable.barcodesById.clear();
-      Variable.barcodesById = await DatabaseHelper().getDataAbc();
-      setState(() {
-        print('barcodes by id: ${Variable.barcodesById}');
-      });
-      // Variable.barcodesById.add({
-      //   'bc_entried': Variable.schedules[0]['qcode_sch'],
-      // });
     }
   }
 
   Future<void> _scanSchedule() async {
+    // if (Variable.schedules.isEmpty) {
     loading(context, message: "Getting schedule data...");
+    // }
+    await checkServerStatus();
     if (Variable.serverStatus == false) {
-      if (schController.text.split('_').last.length >= 3 &&
-          schController.text.contains('-')) {
+      if (schController.text.split('_').last.length == 10 &&
+          schController.text.contains('_')) {
         Variable.schedules.clear();
+        // List<dynamic> dataScheduleLocal = await DatabaseHelper()
+        // .getScheduleLocal(Variable.schedules[0]['qcode_sch']);
         Variable.schedules.add(
           {
             'qcode_sch': schController.text,
             'size': schController.text.split('_').first,
             'descr': '-',
             'qtysch': '-',
-            'act': '-',
+            'act': Variable.barcodesForFetching.length.toString(),
           },
         );
+        Navigator.pop(context);
         print(Variable.schedules);
         setState(() {
-          fetchBarcodeById();
+          Navigator.pushReplacementNamed(context, '/prod');
         });
       } else {
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Schedule not found",
@@ -133,13 +254,14 @@ class _ProdPageState extends State<ProdPage> {
           ),
         );
       }
-      Timer(const Duration(seconds: 2), () {
-        Navigator.of(context).pop();
-      });
+      // Timer(const Duration(seconds: 2), () {
+      //   Navigator.of(context).pop();
+      // });
     } else {
       final bool response = await getSchedule(schController.text);
 
       if (!response) {
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Schedule not found",
@@ -150,19 +272,79 @@ class _ProdPageState extends State<ProdPage> {
         );
       } else {
         if (schController.text.isNotEmpty) {
+          Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("Sch found"),
+              content: Text("Schedule found"),
               duration: Duration(seconds: 3),
               backgroundColor: Colors.green,
             ),
           );
         }
         setState(() {
-          fetchBarcodeById();
+          Navigator.pushReplacementNamed(context, '/prod');
         });
       }
     }
+  }
+
+  Future<void> connect(String mac) async {
+    // setState(() {
+    // bool? dvcConn = false;
+    // PrintBluetoothThermal.disconnect;
+    // });
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                color: AppColors.orange,
+              ),
+              SizedBox(height: 16),
+              Text(
+                "Connecting...",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          // child: Text("Connecting..."),
+        );
+      },
+    );
+
+    // Attempt to connect
+    bool result = await PrintBluetoothThermal.connect(macPrinterAddress: mac);
+
+    Navigator.pop(context); // Hide loading indicator
+
+    if (result == false) {
+      result = await PrintBluetoothThermal.connect(macPrinterAddress: mac);
+    }
+
+    // if (result) {
+    //   print("connected to $mac");
+    //   setState(() {
+    //     // dvcConn = true;
+    //   });
+    // }
+
+    // ScaffoldMessenger.of(context).showSnackBar(
+    //   SnackBar(
+    //     content: Text("Connection Status: $result\nMac Address: $mac",
+    //         style: const TextStyle(color: Colors.white)),
+    //     duration: const Duration(seconds: 3),
+    //     backgroundColor: result ? Colors.green : Colors.red,
+    //   ),
+    // );
   }
 
   @override
@@ -178,7 +360,7 @@ class _ProdPageState extends State<ProdPage> {
         ),
         body: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.only(top: 16, left: 16, right: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -188,7 +370,7 @@ class _ProdPageState extends State<ProdPage> {
                     Expanded(
                       child: TextFormField(
                         autofocus: true,
-                        controller: Variable.schedules.isEmpty ? schController : TextEditingController(text: Variable.schedules[0]['qcode_sch']),
+                        controller: schController,
                         inputFormatters: [UpperCaseTextFormatter()],
                         style: const TextStyle(
                           color: Colors.black,
@@ -245,15 +427,13 @@ class _ProdPageState extends State<ProdPage> {
                         ),
                         onPressed: () {
                           // setState(() {
-                            schController.clear();
-                            Variable.barcodesBySch.clear();
-                            Variable.barcodesById.clear();
-                            Variable.schedules.clear();
-                            // Variable.idPrint = '';
-                            print('schedule: ${Variable.schedules}');
-                            setState(() {
-                              
-                            });
+                          schController.clear();
+                          Variable.barcodesForFetching = [];
+                          Variable.schedules.clear();
+                          // Variable.idRoll;
+                          // Variable.idPrint = '';
+                          print('schedule: ${Variable.schedules}');
+                          setState(() {});
                           // });
                         },
                         child: const Icon(
@@ -264,7 +444,93 @@ class _ProdPageState extends State<ProdPage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
+                Visibility(
+                  visible: Variable.sect == 'ACL',
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'No. Roll: ',
+                              style: TextStyle(
+                                  fontSize: 14, color: Colors.grey[600]),
+                            ),
+                            Visibility(
+                              visible: Variable.serverStatus == true,
+                              child: Text(
+                                '${Variable.valcount} - ${Variable.idRoll}',
+                                style: const TextStyle(
+                                    fontSize: 14, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            Visibility(
+                              visible: Variable.serverStatus == false,
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 50,
+                                    child: TextField(
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly
+                                      ],
+                                      textAlign: TextAlign.center,
+                                      controller: noRollController,
+                                      style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold),
+                                      decoration: const InputDecoration(
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    ' - ${Variable.idRoll}',
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              backgroundColor: AppColors.lightblue,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              )
+                            ),
+                            
+                            onPressed: () {
+                              setState(() {
+                                qtyController.text = '450';
+                              });
+                            },
+                            child: Text(
+                              '450',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    ],
+                  ),
+                ),
+                // SizedBox(height: 4,),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -380,27 +646,43 @@ class _ProdPageState extends State<ProdPage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () {
-                          PrintModels().printAllBarcode();
+                        onPressed: () async {
+                          if (Variable.barcodesForFetching.isEmpty) return;
+                          if (!await PrintBluetoothThermal.connectionStatus) {
+                            await connect(Variable.macAdress.split("#")[1]);
+                          }
+                          if (Variable.sect == 'ACL') {
+                            await PrintModels().printLastBarcode();
+                          } else {
+                            await PrintModels().printAllBarcode();
+                          }
                         },
                         icon: const Icon(
                           Icons.print,
                           size: 22,
                           color: Colors.white,
                         ),
-                        label: const Text(
-                          'Print All',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.white,
-                          ),
-                        ),
+                        label: Variable.sect == 'ACL'
+                            ? const Text(
+                                'Print',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Print All',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           shape: RoundedRectangleBorder(
@@ -414,7 +696,12 @@ class _ProdPageState extends State<ProdPage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () {
+                        onPressed: () async {
+                          if (!await PrintBluetoothThermal.connectionStatus) {
+                            await connect(Variable.macAdress.split("#")[1]);
+                            // await PrintModels().printChecked();
+                            // } else {
+                          }
                           PrintModels().printChecked();
                         },
                         icon: const Icon(
@@ -445,233 +732,269 @@ class _ProdPageState extends State<ProdPage> {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          int convert = 1;
-                          if (Variable.schedules.isNotEmpty) {
-                            switch (Variable.schedules[0]['size']
-                                .split('-')
-                                .first) {
-                              case 'APB':
-                                convert = 29;
-                                break;
-                              case 'ABB':
-                                convert = 36;
-                                break;
-                              case 'ACB':
-                                convert = 30;
-                                break;
-                              case 'AFB':
-                                convert = 28;
-                                break;
-                              default:
-                                convert = 1;
-                            }
-                          }
-                          if (Variable.schedules.isEmpty ||
+                          // int convert = 1;
+                          // if (Variable.schedules.isNotEmpty) {
+                          //   switch (Variable.schedules[0]['size']
+                          //       .split('-')
+                          //       .first) {
+                          //     case 'APB':
+                          //       convert = 29;
+                          //       break;
+                          //     case 'ABB':
+                          //       convert = 36;
+                          //       break;
+                          //     case 'ACB':
+                          //       convert = 30;
+                          //       break;
+                          //     case 'AFB':
+                          //       convert = 28;
+                          //       break;
+                          //     default:
+                          //       convert = 1;
+                          //   }
+                          // }
+                          // if (Variable.schedules.isEmpty ||
+                          //     qtyController.text.isEmpty) {
+                          //   ScaffoldMessenger.of(context).showSnackBar(
+                          //     SnackBar(
+                          //       content: const Text(
+                          //           "Sch or Quantity cannot be empty",
+                          //           style: TextStyle(color: Colors.white)),
+                          //       duration: const Duration(seconds: 3),
+                          //       backgroundColor: Colors.red[600],
+                          //     ),
+                          //   );
+                          // } else if (Variable.treatmentDetails.isEmpty) {
+                          //   showDialog(
+                          //       context: context,
+                          //       builder: (context) {
+                          //         return AlertDialog(
+                          //             title: Row(
+                          //               children: [
+                          //                 Icon(Icons.warning,
+                          //                     color: Colors.red[600]),
+                          //                 const SizedBox(width: 10),
+                          //                 Text('Treatment not found',
+                          //                     style: TextStyle(
+                          //                         color: Colors.red[600],
+                          //                         fontWeight: FontWeight.bold,
+                          //                         fontSize: 16)),
+                          //               ],
+                          //             ),
+                          //             content: const Text(
+                          //                 'Silahkan scan treatment terlebih dahulu'),
+                          //             actions: [
+                          //               TextButton(
+                          //                   child: const Text('OK'),
+                          //                   onPressed: () {
+                          //                     Navigator.of(context).pop();
+                          //                     Navigator.pushNamed(
+                          //                         context, '/mtrl');
+                          //                   })
+                          //             ]);
+                          //       });
+                          // } else {
+                          //   if (Variable.serverStatus == true) {
+                          //     if (double.parse(
+                          //             Variable.treatmentDetails[0]['akt']) <
+                          //         (double.parse(Variable.bom[0]['qty']) *
+                          //                 int.parse(qtyController.text) *
+                          //                 convert)
+                          //             .toInt()) {
+                          //       showDialog(
+                          //           context: context,
+                          //           builder: (context) {
+                          //             return AlertDialog(
+                          //                 title: Row(
+                          //                   children: [
+                          //                     Icon(Icons.warning,
+                          //                         color: Colors.red[600]),
+                          //                     const SizedBox(width: 10),
+                          //                     Text(
+                          //                       'Treatment habis',
+                          //                       style: TextStyle(
+                          //                         color: Colors.red[600],
+                          //                         fontWeight: FontWeight.bold,
+                          //                         fontSize: 16,
+                          //                       ),
+                          //                     ),
+                          //                   ],
+                          //                 ),
+                          //                 content: const Text(
+                          //                     'Material tidak cukup\nSilahkan scan treatment baru'),
+                          //                 actions: [
+                          //                   TextButton(
+                          //                       child: const Text('OK'),
+                          //                       onPressed: () {
+                          //                         Navigator.of(context).pop();
+                          //                         Navigator.pushNamed(
+                          //                             context, '/mtrl');
+                          //                       })
+                          //                 ]);
+                          //           });
+                          //     } else if (Variable.bom.any((item) =>
+                          //         item['child'] !=
+                          //         Variable.treatmentDetails[0]['bc_entried']
+                          //             .split('_')
+                          //             .first)) {
+                          //       Navigator.of(context)
+                          //           .pushReplacementNamed('/mtrl');
+                          //       showDialog(
+                          //         context: context,
+                          //         builder: (BuildContext context) {
+                          //           return AlertDialog(
+                          //             title: Row(
+                          //               children: [
+                          //                 Icon(Icons.warning,
+                          //                     color: Colors.red[600]),
+                          //                 const SizedBox(width: 8),
+                          //                 Text(
+                          //                   'Material tidak sesuai',
+                          //                   style: TextStyle(
+                          //                       color: Colors.red[600],
+                          //                       fontSize: 16,
+                          //                       fontWeight: FontWeight.bold),
+                          //                 ),
+                          //               ],
+                          //             ),
+                          //             content: SingleChildScrollView(
+                          //               child: ListBody(
+                          //                 children: [
+                          //                   Text(
+                          //                       '${'BOM (' + Variable.schedules[0]['size']}):',
+                          //                       style: const TextStyle(
+                          //                           color: Colors.black,
+                          //                           fontWeight:
+                          //                               FontWeight.bold)),
+                          //                   ...Variable.bom.map((item) {
+                          //                     return Text(
+                          //                       '- ' + item['child'],
+                          //                       style: const TextStyle(
+                          //                           color: Colors.black,
+                          //                           fontWeight:
+                          //                               FontWeight.bold),
+                          //                     );
+                          //                   }).toList(),
+                          //                 ],
+                          //               ),
+                          //             ),
+                          //             actions: <Widget>[
+                          //               TextButton(
+                          //                 child: const Text(
+                          //                   'OK',
+                          //                   style: TextStyle(
+                          //                       color: AppColors.primary),
+                          //                 ),
+                          //                 onPressed: () {
+                          //                   Navigator.of(context).pop();
+                          //                 },
+                          //               ),
+                          //             ],
+                          //           );
+                          //         },
+                          //       );
+                          //     } else {
+                          //       if (Variable.parent.isNotEmpty) {
+                          //         showDialog(
+                          //             context: context,
+                          //             builder: (context) {
+                          //               return AlertDialog(
+                          //                 title: Row(
+                          //                   children: [
+                          //                     Icon(Icons.question_mark_rounded,
+                          //                         color: AppColors.primary),
+                          //                     const SizedBox(width: 8),
+                          //                     Text(
+                          //                       '${Variable.schedules[0]['size']}',
+                          //                       style: TextStyle(
+                          //                         color: AppColors.primary,
+                          //                         fontSize: 16,
+                          //                         fontWeight: FontWeight.bold,
+                          //                       ),
+                          //                     ),
+                          //                   ],
+                          //                 ),
+                          //                 content: Text(
+                          //                   'akan dilapis sebanyak ${qtyController.text} roll?',
+                          //                   style: const TextStyle(
+                          //                     color: Colors.black,
+                          //                     fontWeight: FontWeight.bold,
+                          //                   ),
+                          //                 ),
+                          //                 actions: <Widget>[
+                          //                   Row(
+                          //                       mainAxisAlignment:
+                          //                           MainAxisAlignment
+                          //                               .spaceBetween,
+                          //                       children: <Widget>[
+                          //                         TextButton(
+                          //                           child: Text(
+                          //                             'TIDAK',
+                          //                             style: TextStyle(
+                          //                                 color:
+                          //                                     Colors.red[600]),
+                          //                           ),
+                          //                           onPressed: () {
+                          //                             addBarcode();
+                          //                             Navigator.of(context)
+                          //                                 .pop();
+                          //                           },
+                          //                         ),
+                          //                         TextButton(
+                          //                           child: Text(
+                          //                             'YA',
+                          //                             style: TextStyle(
+                          //                                 color: Colors
+                          //                                     .green[600]),
+                          //                           ),
+                          //                           onPressed: () {
+                          //                             addBarcode();
+                          //                             Navigator.of(context)
+                          //                                 .pop();
+                          //                             Navigator.of(context)
+                          //                                 .pushReplacementNamed(
+                          //                                     '/srtjln');
+                          //                           },
+                          //                         ),
+                          //                       ])
+                          //                 ],
+                          //           );
+                          //         });
+                          //   }
+
+                          // } else {
+                          //   addBarcode();
+                          // }
+                          // }
+                          if (schController.text.isEmpty ||
                               qtyController.text.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: const Text(
-                                    "Sch or Quantity cannot be empty",
-                                    style: TextStyle(color: Colors.white)),
-                                duration: const Duration(seconds: 3),
+                                  'Sch dan Qty tidak boleh kosong',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                  ),
+                                ),
                                 backgroundColor: Colors.red[600],
                               ),
                             );
-                          } else if (Variable.treatmentDetails.isEmpty) {
-                            showDialog(
-                                context: context,
-                                builder: (context) {
-                                  return AlertDialog(
-                                      title: Row(
-                                        children: [
-                                          Icon(Icons.warning,
-                                              color: Colors.red[600]),
-                                          const SizedBox(width: 10),
-                                          Text('Treatment not found',
-                                              style: TextStyle(
-                                                  color: Colors.red[600],
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 16)),
-                                        ],
-                                      ),
-                                      content: const Text(
-                                          'Silahkan scan treatment terlebih dahulu'),
-                                      actions: [
-                                        TextButton(
-                                            child: const Text('OK'),
-                                            onPressed: () {
-                                              Navigator.of(context).pop();
-                                              Navigator.pushNamed(
-                                                  context, '/mtrl');
-                                            })
-                                      ]);
-                                });
                           } else {
-                            if (Variable.serverStatus == true) {
-                              if (double.parse(
-                                      Variable.treatmentDetails[0]['akt']) <
-                                  (double.parse(Variable.bom[0]['qty']) *
-                                          int.parse(qtyController.text) *
-                                          convert)
-                                      .toInt()) {
-                                showDialog(
-                                    context: context,
-                                    builder: (context) {
-                                      return AlertDialog(
-                                          title: Row(
-                                            children: [
-                                              Icon(Icons.warning,
-                                                  color: Colors.red[600]),
-                                              const SizedBox(width: 10),
-                                              Text('Treatment habis',
-                                                  style: TextStyle(
-                                                      color: Colors.red[600],
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 16)),
-                                            ],
-                                          ),
-                                          content: const Text(
-                                              'Material tidak cukup\nSilahkan scan treatment baru'),
-                                          actions: [
-                                            TextButton(
-                                                child: const Text('OK'),
-                                                onPressed: () {
-                                                  Navigator.of(context).pop();
-                                                  Navigator.pushNamed(
-                                                      context, '/mtrl');
-                                                })
-                                          ]);
-                                    });
-                              } else if (Variable.bom.any((item) =>
-                                  item['child'] !=
-                                  Variable.treatmentDetails[0]['bc_entried']
-                                      .split('_')
-                                      .first)) {
-                                Navigator.of(context)
-                                    .pushReplacementNamed('/mtrl');
-                                showDialog(
-                                  context: context,
-                                  builder: (BuildContext context) {
-                                    return AlertDialog(
-                                      title: Row(
-                                        children: [
-                                          Icon(Icons.warning,
-                                              color: Colors.red[600]),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            'Material tidak sesuai',
-                                            style: TextStyle(
-                                                color: Colors.red[600],
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold),
-                                          ),
-                                        ],
+                            if (Variable.serverStatus == false) {
+                              if (noRollController.text.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text(
+                                      'No Roll tidak boleh kosong',
+                                      style: const TextStyle(
+                                        color: Colors.white,
                                       ),
-                                      content: SingleChildScrollView(
-                                        child: ListBody(
-                                          children: [
-                                            Text(
-                                                '${'BOM (' + Variable.schedules[0]['size']}):',
-                                                style: const TextStyle(
-                                                    color: Colors.black,
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                            ...Variable.bom.map((item) {
-                                              return Text(
-                                                '- ' + item['child'],
-                                                style: const TextStyle(
-                                                    color: Colors.black,
-                                                    fontWeight:
-                                                        FontWeight.bold),
-                                              );
-                                            }).toList(),
-                                          ],
-                                        ),
-                                      ),
-                                      actions: <Widget>[
-                                        TextButton(
-                                          child: const Text(
-                                            'OK',
-                                            style: TextStyle(
-                                                color: AppColors.primary),
-                                          ),
-                                          onPressed: () {
-                                            Navigator.of(context).pop();
-                                          },
-                                        ),
-                                      ],
-                                    );
-                                  },
+                                    ),
+                                    backgroundColor: Colors.red[600],
+                                  ),
                                 );
                               } else {
-                                if (Variable.parent.isNotEmpty) {
-                                  showDialog(
-                                      context: context,
-                                      builder: (context) {
-                                        return AlertDialog(
-                                          title: Row(
-                                            children: [
-                                              Icon(Icons.question_mark_rounded,
-                                                  color: AppColors.primary),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                '${Variable.schedules[0]['size']}',
-                                                style: TextStyle(
-                                                  color: AppColors.primary,
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          content: Text(
-                                            'akan dilapis sebanyak ${qtyController.text} roll?',
-                                            style: const TextStyle(
-                                              color: Colors.black,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          actions: <Widget>[
-                                            Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: <Widget>[
-                                                  TextButton(
-                                                    child: Text(
-                                                      'TIDAK',
-                                                      style: TextStyle(
-                                                          color:
-                                                              Colors.red[600]),
-                                                    ),
-                                                    onPressed: () {
-                                                      addBarcode();
-                                                      Navigator.of(context)
-                                                          .pop();
-                                                    },
-                                                  ),
-                                                  TextButton(
-                                                    child: Text(
-                                                      'YA',
-                                                      style: TextStyle(
-                                                          color: Colors
-                                                              .green[600]),
-                                                    ),
-                                                    onPressed: () {
-                                                      addBarcode();
-                                                      Navigator.of(context)
-                                                          .pop();
-                                                      Navigator.of(context)
-                                                          .pushReplacementNamed(
-                                                              '/srtjln');
-                                                    },
-                                                  ),
-                                                ])
-                                          ],
-                                        );
-                                      });
-                                }
+                                addBarcode();
                               }
                             } else {
                               addBarcode();
@@ -705,7 +1028,7 @@ class _ProdPageState extends State<ProdPage> {
                 const SizedBox(height: 16),
                 FutureBuilder(
                   future:
-                      Variable.barcodesById.isEmpty ? fetchBarcodeById() : null,
+                      Variable.schedules.isEmpty ? fetchBarcodeBySch() : null,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(
@@ -725,7 +1048,7 @@ class _ProdPageState extends State<ProdPage> {
                         ),
                         child: SingleChildScrollView(
                           scrollDirection: Axis.vertical,
-                          child: Variable.barcodesById.isEmpty
+                          child: Variable.barcodesForFetching.isEmpty
                               ? const Center(
                                   child: Text(
                                     'No data',
@@ -744,16 +1067,21 @@ class _ProdPageState extends State<ProdPage> {
                                     color: Colors.grey[600]!,
                                   ),
                                   children: [
-                                    ...Variable.barcodesById.map((barcode) {
+                                    ...Variable.barcodesForFetching
+                                        .map((barcode) {
                                       return TableRow(
                                         children: [
                                           Padding(
                                             padding: const EdgeInsets.all(8.0),
                                             child: Text(
-                                              (Variable.barcodesById
-                                                          .indexOf(barcode) +
-                                                      1)
-                                                  .toString(),
+                                              Variable.sect == 'ACL'
+                                                  ? "${barcode['idprint']} - ${barcode['idroll']}"
+                                                  : (
+                                                      Variable.barcodesForFetching
+                                                              .indexOf(
+                                                                  barcode) +
+                                                          1,
+                                                    ).toString(),
                                               style: const TextStyle(
                                                 fontSize: 14,
                                               ),
@@ -763,27 +1091,35 @@ class _ProdPageState extends State<ProdPage> {
                                           Padding(
                                             padding: const EdgeInsets.all(8.0),
                                             child: Text(
-                                              barcode['bc_entried'],
+                                              Variable.sect == 'ACL'
+                                                  ? barcode['bc_entried']
+                                                      .split('_')
+                                                      .last
+                                                  : barcode['bc_entried'],
                                               style: const TextStyle(
                                                 fontSize: 14,
                                               ),
                                             ),
                                           ),
-                                          Padding(
-                                            padding: EdgeInsets.zero,
-                                            child: Checkbox(
-                                              value:
-                                                  barcode['isChecked'] ?? false,
-                                              activeColor: AppColors.orange,
-                                              onChanged: (bool? value) {
-                                                setState(
-                                                  () {
-                                                    barcode['isChecked'] =
-                                                        value!;
-                                                  },
-                                                );
-                                              },
-                                            ),
+                                          Checkbox(
+                                            value:
+                                                barcode['isChecked'] ?? false,
+                                            activeColor: AppColors.orange,
+                                            onChanged: (bool? value) {
+                                              setState(
+                                                () {
+                                                  barcode['isChecked'] = value!;
+                                                  // DatabaseHelper().updateDataLocalAcl(
+                                                  //   {
+                                                  //     'isChecked': 'true',
+                                                  //   },
+                                                  //   barcode['bc_entried'],
+                                                  // );
+                                                },
+                                              );
+                                              print(
+                                                  Variable.barcodesForFetching);
+                                            },
                                           ),
                                         ],
                                       );

@@ -12,13 +12,16 @@ Future<bool> checkServerStatus() async {
       // timeout = true;
       return http.Response('Timeout', 408);
     });
-    // Variable.serverStatus = response.statusCode == 200;
-    // debugPrint('Server status: ${Variable.serverStatus}');
     if (response.statusCode == 408) {
-      return false;
+      return Variable.serverStatus = false;
+      // return false;
     } else {
-      return response.statusCode == 200;
+      return Variable.serverStatus = response.statusCode == 200;
+      // return Variable.serverStatus = false;
+      // return response.statusCode == 200;
     }
+      // Variable.serverStatus == true;
+      // return true;
     // return response.statusCode == 200;
   } catch (e) {
     return false;
